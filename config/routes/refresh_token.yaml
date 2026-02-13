@@ -1,0 +1,5 @@
+# config/routes/refresh_token.yaml
+api_refresh_token:
+    path: /api/token/refresh
+    controller: Gesdinet\JWTRefreshTokenBundle\Controller\RefreshTokenController::refresh
+    methods: [POST]

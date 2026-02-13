@@ -1,0 +1,5 @@
+{
+  "greeting": "Olá, {{name}}!",
+  "save": "Salvar",
+  "cancel": "Cancelar"
+}

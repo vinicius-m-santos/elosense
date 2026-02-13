@@ -1,0 +1,3 @@
+hello: "Hello"
+welcome_user: "Welcome, %name%!"
+client.created: "Client successfully created."
