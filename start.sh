@@ -12,4 +12,6 @@ if [ ! -f config/jwt/private.pem ]; then
 fi
 
 # Start server
-php -c ./public/.user.ini -S 0.0.0.0:8080 -t public
+php bin/console cache:clear --env=prod
+php bin/console cache:warmup --env=prod
+php -c ./public/.user.ini -S 0.0.0.0:$PORT -t public
