@@ -13,6 +13,8 @@ import {
   Zap,
   Loader2,
   HelpCircle,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +36,8 @@ import {
 import { fetchMatchDetail, fetchPlayerRank, getMatchTips, type MatchSummary } from "@/api/lolApi";
 import { getQueueType, getLaneLabel } from "@/utils/getQueueType";
 import { formatMatchDate } from "@/utils/dateUtils";
+import { useAuth } from "@/providers/AuthProvider";
+import UserDropdown from "@/components/Menu/components/UserDropdown";
 
 const STORAGE_KEY = "elosense_player";
 const TIERS = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "EMERALD", "DIAMOND", "MASTER", "GRANDMASTER", "CHALLENGER"] as const;
@@ -78,6 +82,7 @@ export default function MatchDetailPageConsistent() {
   const [error, setError] = useState<string | null>(null);
   const [comparisonTier, setComparisonTier] = useState<string>(DEFAULT_COMPARE_TIER);
   const [comparisonRank, setComparisonRank] = useState<string>(DEFAULT_COMPARE_RANK);
+  const { isAuthenticated, user: authUser } = useAuth();
   const [lastFetchedTierRank, setLastFetchedTierRank] = useState<{ tier: string; rank: string } | null>(null);
   const puuid = state?.puuid ?? null;
   const region = state?.region ?? "BR1";
@@ -236,7 +241,12 @@ export default function MatchDetailPageConsistent() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {isAuthenticated && authUser && (
+              <UserDropdown user={authUser} isDark={isDark} />
+            )}
+            <Sun className={`h-4 w-4 ${isDark ? "opacity-60 text-zinc-400" : "text-zinc-600"}`} />
             <Switch checked={dark} onCheckedChange={setDark} />
+            <Moon className={`h-4 w-4 ${isDark ? "opacity-60 text-zinc-400" : "text-zinc-600"}`} />
           </div>
         </div>
       </header>

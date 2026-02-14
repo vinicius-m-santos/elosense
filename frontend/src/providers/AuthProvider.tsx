@@ -10,7 +10,7 @@ import {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import Loader from "@/components/ui/loader";
-import { useAuthStore, type AuthUser } from "@/stores/authStore";
+import { useAuthStore, getRoleHome, type AuthUser } from "@/stores/authStore";
 import { getPersistedAuth } from "@/utils/Auth/getPersistedAuth";
 
 type User = {
@@ -40,7 +40,7 @@ type AuthContextType = {
   user: User | null;
   accessToken: string | null;
   api: AxiosInstance;
-  login: (token: string, user: User, refresh_token: string) => void;
+  login: (token: string, user: User, refresh_token: string, options?: { redirectTo?: string }) => void;
   logout: () => void;
   updateUser: (user: User) => void;
   isAuthenticated: boolean;
@@ -98,16 +98,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     navigate("/login");
   }, [navigate]);
 
-  const login = (token: string, userData: User, refresh_token: string) => {
+  const login = (token: string, userData: User, refresh_token: string, options?: { redirectTo?: string }) => {
     setAccessToken(token);
     setUser(userData);
     useAuthStore.getState().setAuth(token, refresh_token, userData as AuthUser);
     localStorage.setItem("refresh_token", refresh_token);
-    if (userData.roles.includes("ROLE_CLIENT")) {
-      navigate("/student");
-    } else {
-      navigate("/week-summary");
-    }
+    const target = options?.redirectTo ?? getRoleHome(userData as AuthUser);
+    navigate(target);
   };
 
   const updateUser = (updatedUser: User) => {

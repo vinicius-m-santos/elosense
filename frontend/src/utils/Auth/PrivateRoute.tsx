@@ -23,12 +23,7 @@ const PrivateRoute = ({ children, allowedRoles }: PrivateRouteProps) => {
             user.roles.includes(role)
         );
         if (!hasAllowedRole) {
-            const redirectTo = user.roles.includes(ROLE_CLIENT)
-                ? "/student"
-                : user.roles.includes(ROLE_PERSONAL)
-                  ? "/week-summary"
-                  : "/login";
-            return <Navigate to={redirectTo} replace />;
+            return <Navigate to="/" replace />;
         }
     }
 

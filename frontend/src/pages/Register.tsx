@@ -1,49 +1,21 @@
 import { useState, useEffect } from "react";
 import { useApi } from "@/api/Api";
 import toast from "react-hot-toast";
+import { Eye, EyeOff, Moon, Sun, Zap, Loader2 } from "lucide-react";
 import { useNavigate, Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import ButtonLoader from "@/components/ui/buttonLoader";
-import { Eye, EyeOff } from "lucide-react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import z from "zod";
-import { parse, isValid as isValidDate } from "date-fns";
-import PhoneInput from "@/components/ui/Inputs/PhoneInput";
-import BirthDateInput, { birthDateToISO } from "@/components/Inputs/BirthDateInput";
-import { useRequest } from "@/api/request";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 
 const registerSchema = z
     .object({
-        firstName: z.string().min(1, "Nome é obrigatório"),
-        lastName: z.string().min(1, "Sobrenome é obrigatório"),
+        name: z.string().min(1, "Nome é obrigatório"),
         email: z.string().email("Email inválido"),
-        phone: z
-            .string()
-            .optional()
-            .refine(
-                (val) => {
-                    if (!val || !val.trim()) return true;
-                    const digits = val.replace(/\D/g, "");
-                    return digits.length === 10 || digits.length === 11;
-                },
-                { message: "Telefone inválido. Use o formato (00) 00000-0000 ou (00) 0000-0000" }
-            ),
-        birthDate: z
-            .string()
-            .optional()
-            .nullable()
-            .refine(
-                (val) => {
-                    if (!val?.trim()) return true;
-                    const parsed = parse(val, "dd/MM/yyyy", new Date());
-                    if (isValidDate(parsed)) {
-                        return parsed <= new Date() && parsed >= new Date("1900-01-01");
-                    }
-                    return false;
-                },
-                { message: "Data inválida. Use o formato dd/mm/aaaa" }
-            ),
         password: z
             .string()
             .min(8, "A senha deve ter pelo menos 8 caracteres")
@@ -59,48 +31,18 @@ const registerSchema = z
 
 type RegisterFormData = z.infer<typeof registerSchema>;
 
-function getPasswordStrength(password: string): {
-    strength: "weak" | "medium" | "strong";
-    score: number;
-    feedback: string[];
-} {
-    const feedback: string[] = [];
-    let score = 0;
-
-    if (password.length >= 8) score += 1;
-    else feedback.push("Pelo menos 8 caracteres");
-
-    if (/[a-z]/.test(password)) score += 1;
-    else feedback.push("Letras minúsculas");
-
-    if (/[A-Z]/.test(password)) score += 1;
-    else feedback.push("Letras maiúsculas");
-
-    if (/[0-9]/.test(password)) score += 1;
-    else feedback.push("Números");
-
-    if (password.length >= 12) score += 1;
-
-    let strength: "weak" | "medium" | "strong" = "weak";
-    if (score >= 4) strength = "strong";
-    else if (score >= 3) strength = "medium";
-
-    return { strength, score, feedback };
-}
-
-const Register = () => {
+export default function Register() {
+    const [dark, setDark] = useState(true);
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const api = useApi();
     const navigate = useNavigate();
-    const request = useRequest();
 
     const {
         register,
         handleSubmit,
         watch,
-        control,
         trigger,
         formState: { errors, isValid },
     } = useForm<RegisterFormData>({
@@ -110,339 +52,167 @@ const Register = () => {
 
     const password = watch("password", "");
     const confirmPassword = watch("confirmPassword", "");
-    const passwordStrength = password ? getPasswordStrength(password) : null;
 
-    // Valida a confirmação de senha em tempo real quando a senha muda
     useEffect(() => {
-        if (confirmPassword) {
-            trigger("confirmPassword");
-        }
+        if (confirmPassword) trigger("confirmPassword");
     }, [password, confirmPassword, trigger]);
+
+    const isDark = dark;
+    const textPrimary = isDark ? "text-zinc-100" : "text-zinc-900";
+    const textMuted = isDark ? "text-zinc-500" : "text-zinc-500";
+    const bgMain = isDark ? "bg-zinc-950" : "bg-zinc-100";
+    const glassCard = isDark
+        ? "border-white/10 bg-white/5 backdrop-blur-xl"
+        : "border-zinc-200/80 bg-white/80 backdrop-blur-xl";
+    const inputClass = isDark
+        ? "bg-white/5 border-white/10 focus-visible:ring-purple-500 text-zinc-100"
+        : "bg-zinc-50 border-zinc-200 text-zinc-900 focus-visible:ring-purple-500";
 
     const onSubmit = async (data: RegisterFormData) => {
         setLoading(true);
-
-        const birthDateString = birthDateToISO(data.birthDate ?? null);
-
-        await request({
-            method: "POST",
-            url: "/register",
-            data: {
-                firstName: data.firstName,
-                lastName: data.lastName,
+        try {
+            const res = await api.post("/register", {
+                firstName: data.name,
+                lastName: data.name,
                 email: data.email,
                 password: data.password,
-                phone: data.phone || null,
-                birthDate: birthDateString,
-            },
-            showSuccess: false,
-            onAccept: (payload: { message?: string }) => {
-                setLoading(false);
-                if (payload?.message?.includes("Senha definida")) {
-                    toast.success(payload.message);
-                    navigate("/login");
-                    return;
-                }
-                toast.success(
-                    "Cadastro realizado com sucesso! Verifique seu email para ativar sua conta."
-                );
-                navigate("/register-success");
-            },
-            onReject: () => {
-                setLoading(false);
-            },
-        });
+            });
+            if (res.data?.message?.includes("Senha definida")) {
+                toast.success(res.data.message);
+                navigate("/login");
+                return;
+            }
+            toast.success("Cadastro realizado! Verifique seu email para ativar sua conta.");
+            navigate("/register-success");
+        } catch (e: unknown) {
+            const err = e as { response?: { data?: { message?: string } } };
+            toast.error(err?.response?.data?.message ?? "Erro ao cadastrar. Tente novamente.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
-        <div className="min-h-[80vh] flex items-center justify-center px-4 py-10">
-            <div className="bg-white shadow-md rounded-2xl p-6 w-full max-w-md animate-fade-in">
-                <h2 className="text-3xl font-bold text-gray-800 text-center mb-2">
-                    Criar Conta
-                </h2>
-                <p className="text-center text-gray-500 mb-8 text-sm">
-                    Preencha os dados para se cadastrar
-                </p>
+        <div className={`min-h-screen w-full transition-colors duration-500 ${bgMain} ${textPrimary}`}>
+            <div className="pointer-events-none fixed inset-0 overflow-hidden">
+                <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[500px] w-[500px] rounded-full bg-purple-600/20 blur-[120px]" />
+                <div className="absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-blue-600/20 blur-[120px]" />
+            </div>
 
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label
-                                htmlFor="firstName"
-                                className="block text-sm font-medium text-gray-700 mb-1"
-                            >
-                                Nome
-                            </label>
-                            <input
-                                type="text"
-                                id="firstName"
-                                {...register("firstName")}
-                                className="w-full text-black border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="Nome"
-                                required
-                            />
-                            {errors.firstName && (
-                                <p className="text-xs text-red-500 mt-1">
-                                    {errors.firstName.message}
-                                </p>
-                            )}
-                        </div>
-
-                        <div>
-                            <label
-                                htmlFor="lastName"
-                                className="block text-sm font-medium text-gray-700 mb-1"
-                            >
-                                Sobrenome
-                            </label>
-                            <input
-                                type="text"
-                                id="lastName"
-                                {...register("lastName")}
-                                className="w-full text-black border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="Sobrenome"
-                                required
-                            />
-                            {errors.lastName && (
-                                <p className="text-xs text-red-500 mt-1">
-                                    {errors.lastName.message}
-                                </p>
-                            )}
-                        </div>
+            <header className={`relative z-10 border-b ${isDark ? "border-white/5" : "border-zinc-200/80"} backdrop-blur-xl`}>
+                <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+                    <div className="flex items-center gap-2 font-semibold tracking-tight">
+                        <Zap className="h-5 w-5 text-purple-400" />
+                        <span className="text-lg">EloSense</span>
+                        <Badge className="ml-2 bg-purple-500/10 text-purple-400 border-purple-500/20">Criar conta</Badge>
                     </div>
-
-                    <div>
-                        <label
-                            htmlFor="email"
-                            className="block text-sm font-medium text-gray-700 mb-1"
-                        >
-                            Email
-                        </label>
-                        <input
-                            type="email"
-                            id="email"
-                            {...register("email")}
-                            className="w-full text-black border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="seu@email.com"
-                            required
-                        />
-                        {errors.email && (
-                            <p className="text-xs text-red-500 mt-1">
-                                {errors.email.message}
-                            </p>
-                        )}
+                    <div className="flex items-center gap-3">
+                        <Sun className={`h-4 w-4 ${isDark ? "opacity-60 text-zinc-400" : "text-zinc-600"}`} />
+                        <Switch checked={dark} onCheckedChange={setDark} />
+                        <Moon className={`h-4 w-4 ${isDark ? "opacity-60 text-zinc-400" : "text-zinc-600"}`} />
                     </div>
+                </div>
+            </header>
 
-                    <div>
-                        <label
-                            htmlFor="phone"
-                            className="block text-sm font-medium text-gray-700 mb-1"
-                        >
-                            Telefone (opcional)
-                        </label>
-                        <Controller
-                            control={control}
-                            name="phone"
-                            render={({ field, fieldState }) => (
-                                <div>
-                                    <PhoneInput
-                                        value={field.value || ""}
-                                        onChange={(label, value) => {
-                                            field.onChange(value);
-                                        }}
-                                        onBlur={field.onBlur}
-                                        required={false}
-                                        customClass="w-full text-black border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        label="phone"
-                                    />
-                                    {fieldState.error && (
-                                        <p className="text-xs text-red-500 mt-1">
-                                            {fieldState.error.message}
-                                        </p>
-                                    )}
-                                </div>
-                            )}
-                        />
-                    </div>
+            <main className="relative z-10 flex flex-col items-center justify-center px-6 py-16">
+                <Card className={`w-full max-w-sm ${glassCard}`}>
+                    <CardContent className="p-6 space-y-4">
+                        <h2 className={`text-xl font-semibold ${textPrimary} text-center`}>Criar conta</h2>
+                        <p className={`text-center text-sm ${textMuted} mb-4`}>Preencha os dados para se cadastrar</p>
 
-                    <div>
-                        <label
-                            htmlFor="birthDate"
-                            className="block text-sm font-medium text-gray-700 mb-1"
-                        >
-                            Data de Nascimento (opcional)
-                        </label>
-                        <Controller
-                            control={control}
-                            name="birthDate"
-                            render={({ field, fieldState }) => (
-                                <div>
-                                    <BirthDateInput
-                                        value={field.value ?? ""}
-                                        onChange={(val) => field.onChange(val)}
-                                        onBlur={field.onBlur}
-                                        placeholder="dd/mm/aaaa"
-                                        id="birthDate"
-                                        className="w-full text-black border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                    {fieldState.error && (
-                                        <p className="text-xs text-red-500 mt-1">
-                                            {fieldState.error.message}
-                                        </p>
-                                    )}
-                                </div>
-                            )}
-                        />
-                    </div>
-
-                    <div>
-                        <label
-                            htmlFor="password"
-                            className="block text-sm font-medium text-gray-700 mb-1"
-                        >
-                            Senha
-                        </label>
-                        <div className="relative">
-                            <input
-                                type={showPassword ? "text" : "password"}
-                                id="password"
-                                {...register("password")}
-                                className="w-full text-black border border-gray-300 rounded-lg px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="••••••••"
-                                required
-                            />
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                                onClick={() => setShowPassword(!showPassword)}
-                            >
-                                {showPassword ? (
-                                    <EyeOff className="h-4 w-4 text-gray-500" />
-                                ) : (
-                                    <Eye className="h-4 w-4 text-gray-500" />
-                                )}
-                            </Button>
-                        </div>
-                        {errors.password && (
-                            <p className="text-xs text-red-500 mt-1">
-                                {errors.password.message}
-                            </p>
-                        )}
-                        {passwordStrength && password && (
-                            <div className="space-y-1 mt-2">
-                                <div className="flex gap-1 h-1.5">
-                                    <div
-                                        className={`flex-1 rounded ${passwordStrength.strength === "weak"
-                                            ? "bg-red-500"
-                                            : passwordStrength.strength === "medium"
-                                                ? "bg-yellow-500"
-                                                : "bg-green-500"
-                                            }`}
-                                    />
-                                    <div
-                                        className={`flex-1 rounded ${passwordStrength.strength === "strong"
-                                            ? "bg-green-500"
-                                            : passwordStrength.strength === "medium"
-                                                ? "bg-yellow-500"
-                                                : "bg-gray-300"
-                                            }`}
-                                    />
-                                    <div
-                                        className={`flex-1 rounded ${passwordStrength.strength === "strong"
-                                            ? "bg-green-500"
-                                            : "bg-gray-300"
-                                            }`}
-                                    />
-                                </div>
-                                <p className="text-xs text-gray-600">
-                                    Força:{" "}
-                                    <span
-                                        className={
-                                            passwordStrength.strength === "weak"
-                                                ? "text-red-600"
-                                                : passwordStrength.strength === "medium"
-                                                    ? "text-yellow-600"
-                                                    : "text-green-600"
-                                        }
-                                    >
-                                        {passwordStrength.strength === "weak"
-                                            ? "Fraca"
-                                            : passwordStrength.strength === "medium"
-                                                ? "Média"
-                                                : "Forte"}
-                                    </span>
-                                </p>
-                                {passwordStrength.feedback.length > 0 && (
-                                    <ul className="text-xs text-gray-600 list-disc list-inside">
-                                        {passwordStrength.feedback.map((item, idx) => (
-                                            <li key={idx}>{item}</li>
-                                        ))}
-                                    </ul>
+                        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                            <div className="space-y-2">
+                                <label htmlFor="name" className={`text-sm ${textMuted}`}>Nome</label>
+                                <Input
+                                    id="name"
+                                    type="text"
+                                    placeholder="Seu nome"
+                                    className={inputClass}
+                                    {...register("name")}
+                                />
+                                {errors.name && (
+                                    <p className="text-xs text-red-400">{errors.name.message}</p>
                                 )}
                             </div>
-                        )}
-                    </div>
-
-                    <div>
-                        <label
-                            htmlFor="confirmPassword"
-                            className="block text-sm font-medium text-gray-700 mb-1"
-                        >
-                            Confirmar Senha
-                        </label>
-                        <div className="relative">
-                            <input
-                                type={showConfirmPassword ? "text" : "password"}
-                                id="confirmPassword"
-                                {...register("confirmPassword")}
-                                className="w-full text-black border border-gray-300 rounded-lg px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="••••••••"
-                                required
-                            />
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                            >
-                                {showConfirmPassword ? (
-                                    <EyeOff className="h-4 w-4 text-gray-500" />
-                                ) : (
-                                    <Eye className="h-4 w-4 text-gray-500" />
+                            <div className="space-y-2">
+                                <label htmlFor="email" className={`text-sm ${textMuted}`}>Email</label>
+                                <Input
+                                    id="email"
+                                    type="email"
+                                    placeholder="seu@email.com"
+                                    className={inputClass}
+                                    {...register("email")}
+                                />
+                                {errors.email && (
+                                    <p className="text-xs text-red-400">{errors.email.message}</p>
                                 )}
+                            </div>
+                            <div className="space-y-2">
+                                <label htmlFor="password" className={`text-sm ${textMuted}`}>Senha</label>
+                                <div className="relative">
+                                    <Input
+                                        id="password"
+                                        type={showPassword ? "text" : "password"}
+                                        placeholder="••••••••"
+                                        className={`pr-10 ${inputClass}`}
+                                        {...register("password")}
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                    >
+                                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </Button>
+                                </div>
+                                {errors.password && (
+                                    <p className="text-xs text-red-400">{errors.password.message}</p>
+                                )}
+                            </div>
+                            <div className="space-y-2">
+                                <label htmlFor="confirmPassword" className={`text-sm ${textMuted}`}>Confirmar senha</label>
+                                <div className="relative">
+                                    <Input
+                                        id="confirmPassword"
+                                        type={showConfirmPassword ? "text" : "password"}
+                                        placeholder="••••••••"
+                                        className={`pr-10 ${inputClass}`}
+                                        {...register("confirmPassword")}
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                    >
+                                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </Button>
+                                </div>
+                                {errors.confirmPassword && (
+                                    <p className="text-xs text-red-400">{errors.confirmPassword.message}</p>
+                                )}
+                            </div>
+                            <Button
+                                type="submit"
+                                disabled={loading || !isValid}
+                                className="w-full bg-gradient-to-r from-purple-500 to-blue-500 hover:opacity-90 text-white"
+                            >
+                                {loading ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Cadastrar"}
                             </Button>
-                        </div>
-                        {errors.confirmPassword && (
-                            <p className="text-xs text-red-500 mt-1">
-                                {errors.confirmPassword.message}
-                            </p>
-                        )}
-                    </div>
+                        </form>
 
-                    <Button
-                        type="submit"
-                        className="w-full bg-blue-600 cursor-pointer text-white font-semibold rounded-lg py-2 hover:bg-blue-700 transition-colors disabled:opacity-70"
-                        disabled={loading || !isValid}
-                    >
-                        {!loading && "Cadastrar"}
-                        {loading && <ButtonLoader />}
-                    </Button>
-                </form>
-
-                <div className="text-center mt-4">
-                    <p className="text-sm text-gray-600">
-                        Já tem uma conta?{" "}
-                        <Link to="/login" className="text-blue-600 hover:underline">
-                            Faça login
-                        </Link>
-                    </p>
-                </div>
-            </div>
+                        <p className={`text-center text-sm ${textMuted} pt-2`}>
+                            Já tem conta? <Link to="/login" className="text-purple-400 hover:underline">Faça login</Link>
+                        </p>
+                        <p className="text-center text-sm">
+                            <Link to="/" className={textMuted}>Voltar ao início</Link>
+                        </p>
+                    </CardContent>
+                </Card>
+            </main>
         </div>
     );
-};
-
-export default Register;
+}

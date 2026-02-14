@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,9 +15,36 @@ import {
 import { Sparkles, BarChart3, Target, Moon, Sun, Zap, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { fetchPlayer, fetchMatches } from "@/api/lolApi";
+import { useAuthStore } from "@/stores/authStore";
+import { useAuth } from "@/providers/AuthProvider";
+import UserDropdown from "@/components/Menu/components/UserDropdown";
 
 const DEFAULT_REGION = "BR1";
 const REGIONS = ["BR1", "NA1", "LA1", "LA2", "LAN1", "LAS1", "EUW1", "EUN1", "TR1", "KR", "JP1", "OC1", "PH2", "SG2", "TH2", "TW2", "VN2"];
+const FREE_SEARCHES_KEY = "elosense_free_searches";
+const FREE_SEARCHES_LIMIT = 3;
+
+function getToday(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getFreeSearchCount(): number {
+  try {
+    const raw = localStorage.getItem(FREE_SEARCHES_KEY);
+    if (!raw) return 0;
+    const data = JSON.parse(raw) as { date: string; count: number };
+    if (data.date !== getToday()) return 0;
+    return typeof data.count === "number" ? data.count : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function incrementFreeSearch(): void {
+  const today = getToday();
+  const current = getFreeSearchCount();
+  localStorage.setItem(FREE_SEARCHES_KEY, JSON.stringify({ date: today, count: Math.min(current + 1, FREE_SEARCHES_LIMIT) }));
+}
 
 export default function HomePage() {
   const [dark, setDark] = useState(true);
@@ -27,7 +54,9 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState<"idle" | "player" | "matches">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [limitReached, setLimitReached] = useState(false);
   const navigate = useNavigate();
+  const { isAuthenticated, user: authUser } = useAuth();
 
   const isDark = dark;
   const textPrimary = isDark ? "text-zinc-100" : "text-zinc-900";
@@ -43,11 +72,19 @@ export default function HomePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setLimitReached(false);
     const g = gameName.trim();
     const t = tagLine.trim();
     if (!g || !t) {
       setError("Preencha Game Name e Tag.");
       return;
+    }
+    if (!useAuthStore.getState().hasStoredToken()) {
+      const count = getFreeSearchCount();
+      if (count >= FREE_SEARCHES_LIMIT) {
+        setLimitReached(true);
+        return;
+      }
     }
     setLoading(true);
     try {
@@ -55,6 +92,9 @@ export default function HomePage() {
       const { puuid } = await fetchPlayer(g, t);
       setLoadingStep("matches");
       const matches = await fetchMatches({ puuid, region });
+      if (!useAuthStore.getState().hasStoredToken()) {
+        incrementFreeSearch();
+      }
       navigate("/dashboard", {
         state: { puuid, gameName: g, tagLine: t, region, matches },
       });
@@ -87,6 +127,13 @@ export default function HomePage() {
             <Badge className="ml-2 bg-purple-500/10 text-purple-400 border-purple-500/20">Beta</Badge>
           </div>
           <div className="flex items-center gap-3">
+            {isAuthenticated && authUser ? (
+              <UserDropdown user={authUser} isDark={isDark} />
+            ) : (
+              <Button variant="ghost" size="sm" className={`${textPrimary} hover:bg-white/10`} asChild>
+                <Link to="/login">Entrar</Link>
+              </Button>
+            )}
             <Sun className={`h-4 w-4 ${isDark ? "opacity-60 text-zinc-400" : "text-zinc-600"}`} />
             <Switch checked={dark} onCheckedChange={setDark} />
             <Moon className={`h-4 w-4 ${isDark ? "opacity-60 text-zinc-400" : "text-zinc-600"}`} />
@@ -181,6 +228,19 @@ export default function HomePage() {
                   </div>
                   {error && (
                     <p className="text-sm text-red-400">{error}</p>
+                  )}
+                  {limitReached && (
+                    <div className={`rounded-lg border p-4 text-sm ${isDark ? "bg-amber-500/10 border-amber-500/30 text-amber-200" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
+                      <p className="mb-3">Você atingiu o limite de 3 pesquisas gratuitas hoje. Faça login para continuar.</p>
+                      <div className="flex flex-col flex-wrap gap-2">
+                        <Button type="button" variant="default" className="bg-gradient-to-r from-purple-500 to-blue-500 text-white" asChild>
+                          <Link to="/login" state={{ from: "/" }}>Entrar</Link>
+                        </Button>
+                        <Button type="button" variant="outline" asChild>
+                          <Link to="/register">Criar conta</Link>
+                        </Button>
+                      </div>
+                    </div>
                   )}
                   <Button
                     type="submit"

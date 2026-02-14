@@ -37,14 +37,9 @@ type AuthState = {
   getRoleHome: () => string;
 };
 
-const ROLE_CLIENT = "ROLE_CLIENT";
-const ROLE_PERSONAL = "ROLE_PERSONAL";
-
 export function getRoleHome(user: AuthUser | null): string {
   if (!user?.roles?.length) return "/login";
-  if (user.roles.includes(ROLE_CLIENT)) return "/student";
-  if (user.roles.includes(ROLE_PERSONAL)) return "/week-summary";
-  return "/login";
+  return "/";
 }
 
 export const useAuthStore = create<AuthState>()(

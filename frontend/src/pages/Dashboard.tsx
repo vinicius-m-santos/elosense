@@ -26,6 +26,8 @@ import { Switch } from "@/components/ui/switch";
 import { fetchMatches, fetchPlayerRank, getMatchTips, getMatchIdealLabel, type MatchSummary, type LeagueEntry } from "@/api/lolApi";
 import { getQueueType, getRankQueueLabel, getLaneLabel } from "@/utils/getQueueType";
 import { formatMatchDate } from "@/utils/dateUtils";
+import { useAuth } from "@/providers/AuthProvider";
+import UserDropdown from "@/components/Menu/components/UserDropdown";
 
 const STORAGE_KEY = "elosense_player";
 const DEFAULT_REGION = "BR1";
@@ -62,6 +64,7 @@ export default function DashboardConsistent() {
   const [matches, setMatches] = useState<MatchSummary[]>(state?.matches ?? []);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const { isAuthenticated, user: authUser } = useAuth();
 
   const sortMatchesByTime = (list: MatchSummary[]) =>
     [...list].sort((a, b) => (b.gameEndTimestamp ?? 0) - (a.gameEndTimestamp ?? 0));
@@ -223,6 +226,9 @@ export default function DashboardConsistent() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {isAuthenticated && authUser && (
+              <UserDropdown user={authUser} isDark={isDark} />
+            )}
             <Sun className={`h-4 w-4 ${isDark ? "opacity-60 text-zinc-400" : "text-zinc-600"}`} />
             <Switch checked={dark} onCheckedChange={setDark} />
             <Moon className={`h-4 w-4 ${isDark ? "opacity-60 text-zinc-400" : "text-zinc-600"}`} />

@@ -2,18 +2,22 @@ import { useState } from "react";
 import { useAuth } from "@/providers/AuthProvider";
 import { useApi } from "@/api/Api";
 import toast from "react-hot-toast";
-import { Eye, EyeOff } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Eye, EyeOff, Moon, Sun, Zap, Loader2 } from "lucide-react";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { GoogleLogin } from "@react-oauth/google";
 import { Button } from "@/components/ui/button";
-import ButtonLoader from "@/components/ui/buttonLoader";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 
 const googleClientId =
     (import.meta as unknown as { env?: { VITE_GOOGLE_CLIENT_ID?: string } }).env
         ?.VITE_GOOGLE_CLIENT_ID ?? "";
 
-const Login = () => {
+export default function Login() {
     const { login } = useAuth();
+    const [dark, setDark] = useState(true);
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
@@ -21,6 +25,19 @@ const Login = () => {
     const [googleLoading, setGoogleLoading] = useState(false);
     const api = useApi();
     const navigate = useNavigate();
+    const location = useLocation();
+    const from = (location.state as { from?: string } | null)?.from ?? "/";
+
+    const isDark = dark;
+    const textPrimary = isDark ? "text-zinc-100" : "text-zinc-900";
+    const textMuted = isDark ? "text-zinc-500" : "text-zinc-500";
+    const bgMain = isDark ? "bg-zinc-950" : "bg-zinc-100";
+    const glassCard = isDark
+        ? "border-white/10 bg-white/5 backdrop-blur-xl"
+        : "border-zinc-200/80 bg-white/80 backdrop-blur-xl";
+    const inputClass = isDark
+        ? "bg-white/5 border-white/10 focus-visible:ring-purple-500 text-zinc-100"
+        : "bg-zinc-50 border-zinc-200 text-zinc-900 focus-visible:ring-purple-500";
 
     const handleGoogleSuccess = async (credentialResponse: { credential?: string }) => {
         const credential = credentialResponse.credential;
@@ -29,7 +46,7 @@ const Login = () => {
         try {
             const res = await api.post("/auth/google", { credential });
             if (res.data?.success && res.data?.token && res.data?.user) {
-                login(res.data.token, res.data.user, res.data.refresh_token);
+                login(res.data.token, res.data.user, res.data.refresh_token, { redirectTo: from });
             } else {
                 toast.error("Falha ao entrar com Google");
             }
@@ -44,175 +61,149 @@ const Login = () => {
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setLoading(true);
-
         try {
-            const res = await api.post("/login_check", {
-                email: email,
-                password: password,
-            });
-
-            if (res.data.requiresVerification) {
+            const res = await api.post("/login_check", { email, password });
+            if (res.data?.requiresVerification) {
                 navigate("/email-not-verified");
                 return;
             }
-
-            if (!res.data.success) {
-                toast.error(res.data.message);
+            if (!res.data?.success) {
+                toast.error(res.data?.message ?? "Falha ao entrar");
                 return;
             }
-
-            login(res.data.token, res.data.user, res.data.refresh_token);
+            login(res.data.token, res.data.user, res.data.refresh_token, { redirectTo: from });
         } catch (e: unknown) {
             const data = (e as { response?: { data?: { success?: boolean; requiresVerification?: boolean; error?: string; message?: string } } })?.response?.data;
-
-            if (!data?.success) {
-                if (data?.requiresVerification) {
-                    navigate("/email-not-verified");
-                    return;
-                }
-
-                if (data?.error) {
-                    toast.error(data.error);
-                }
-
-                if (data?.message) {
-                    toast.error(data.message);
-                }
+            if (data?.requiresVerification) {
+                navigate("/email-not-verified");
+                return;
             }
+            if (data?.error) toast.error(data.error);
+            else if (data?.message) toast.error(data.message);
+            else toast.error("Falha ao entrar. Verifique email e senha.");
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="min-h-[80vh] flex items-center justify-center px-4 py-10">
-            <div className="bg-white shadow-md rounded-2xl p-6 w-full max-w-sm animate-fade-in">
-                <h2 className="text-3xl font-bold text-gray-800 text-center mb-2">
-                    Bem-vindo
-                </h2>
-                <p className="text-center text-gray-500 mb-8 text-sm">
-                    Entre na sua conta para continuar
-                </p>
+        <div className={`min-h-screen w-full transition-colors duration-500 ${bgMain} ${textPrimary}`}>
+            <div className="pointer-events-none fixed inset-0 overflow-hidden">
+                <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[500px] w-[500px] rounded-full bg-purple-600/20 blur-[120px]" />
+                <div className="absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-blue-600/20 blur-[120px]" />
+            </div>
 
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    <div>
-                        <label
-                            htmlFor="email"
-                            className="block text-sm font-medium text-gray-700 mb-1"
-                        >
-                            Email
-                        </label>
-                        <input
-                            type="email"
-                            id="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            className="w-full text-black border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="seu@email.com"
-                            required
-                        />
+            <header className={`relative z-10 border-b ${isDark ? "border-white/5" : "border-zinc-200/80"} backdrop-blur-xl`}>
+                <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+                    <div className="flex items-center gap-2 font-semibold tracking-tight">
+                        <Zap className="h-5 w-5 text-purple-400" />
+                        <span className="text-lg">EloSense</span>
+                        <Badge className="ml-2 bg-purple-500/10 text-purple-400 border-purple-500/20">Entrar</Badge>
                     </div>
-
-                    <div>
-                        <label
-                            htmlFor="password"
-                            className="block text-sm font-medium text-gray-700 mb-1"
-                        >
-                            Senha
-                        </label>
-                        <div className="relative">
-                            <input
-                                type={showPassword ? "text" : "password"}
-                                id="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="w-full text-black border border-gray-300 rounded-lg px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="••••••••"
-                                required
-                            />
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                                onClick={() => setShowPassword(!showPassword)}
-                            >
-                                {showPassword ? (
-                                    <EyeOff className="h-4 w-4 text-gray-500" />
-                                ) : (
-                                    <Eye className="h-4 w-4 text-gray-500" />
-                                )}
-                            </Button>
-                        </div>
+                    <div className="flex items-center gap-3">
+                        <Sun className={`h-4 w-4 ${isDark ? "opacity-60 text-zinc-400" : "text-zinc-600"}`} />
+                        <Switch checked={dark} onCheckedChange={setDark} />
+                        <Moon className={`h-4 w-4 ${isDark ? "opacity-60 text-zinc-400" : "text-zinc-600"}`} />
                     </div>
+                </div>
+            </header>
 
-                    <Button
-                        type="submit"
-                        className="w-full bg-blue-600 cursor-pointer text-white font-semibold rounded-lg py-2 hover:bg-blue-700 transition-colors disabled:opacity-80 mb-0"
-                        disabled={loading}
-                    >
-                        {!loading && "Entrar"}
-                        {loading && <ButtonLoader />}
-                    </Button>
+            <main className="relative z-10 flex flex-col items-center justify-center px-6 py-16">
+                <Card className={`w-full max-w-sm ${glassCard}`}>
+                    <CardContent className="p-6 space-y-4">
+                        <h2 className={`text-xl font-semibold ${textPrimary} text-center`}>Bem-vindo</h2>
+                        <p className={`text-center text-sm ${textMuted} mb-4`}>Entre na sua conta para continuar</p>
 
-                    {googleClientId && (
-                        <>
-                            <div className="relative my-6">
-                                <div className="absolute inset-0 flex items-center">
-                                    <span className="w-full border-t border-gray-300" />
-                                </div>
-                                <div className="relative flex justify-center text-sm">
-                                    <span className="bg-white px-2 text-gray-500">ou</span>
-                                </div>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div className="space-y-2">
+                                <label htmlFor="email" className={`text-sm ${textMuted}`}>Email</label>
+                                <Input
+                                    id="email"
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="seu@email.com"
+                                    className={inputClass}
+                                    required
+                                />
                             </div>
-                            <div className="flex justify-center">
-                                {googleLoading ? (
+                            <div className="space-y-2">
+                                <label htmlFor="password" className={`text-sm ${textMuted}`}>Senha</label>
+                                <div className="relative">
+                                    <Input
+                                        id="password"
+                                        type={showPassword ? "text" : "password"}
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        placeholder="••••••••"
+                                        className={`pr-10 ${inputClass}`}
+                                        required
+                                    />
                                     <Button
                                         type="button"
-                                        disabled
-                                        className="w-full rounded-lg py-2"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                                        onClick={() => setShowPassword(!showPassword)}
                                     >
-                                        <ButtonLoader />
+                                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                     </Button>
-                                ) : (
-                                    <GoogleLogin
-                                        onSuccess={handleGoogleSuccess}
-                                        onError={() => {
-                                            toast.error("Falha ao entrar com Google");
-                                        }}
-                                        useOneTap={false}
-                                        theme="outline"
-                                        size="large"
-                                        width={320}
-                                        shape="rectangular"
-                                        text="signin_with"
-                                    />
-                                )}
+                                </div>
                             </div>
-                        </>
-                    )}
-                </form>
+                            <Button
+                                type="submit"
+                                disabled={loading}
+                                className="w-full bg-gradient-to-r from-purple-500 to-blue-500 hover:opacity-90 text-white"
+                            >
+                                {loading ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Entrar"}
+                            </Button>
 
-                <div className="text-center mt-4">
-                    <button
-                        onClick={() => navigate("/register")}
-                        className="text-sm text-blue-600 hover:underline cursor-pointer"
-                    >
-                        Não tem uma conta? Cadastre-se
-                    </button>
-                </div>
+                            {googleClientId && (
+                                <>
+                                    <div className="relative my-4">
+                                        <div className="absolute inset-0 flex items-center">
+                                            <span className={`w-full border-t ${isDark ? "border-white/10" : "border-zinc-200"}`} />
+                                        </div>
+                                        <div className="relative flex justify-center text-sm">
+                                            <span className={`px-2 ${textMuted}`}>ou</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-center">
+                                        {googleLoading ? (
+                                            <Button type="button" disabled className="w-full">
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                            </Button>
+                                        ) : (
+                                            <GoogleLogin
+                                                onSuccess={handleGoogleSuccess}
+                                                onError={() => toast.error("Falha ao entrar com Google")}
+                                                useOneTap={false}
+                                                theme="filled"
+                                                size="large"
+                                                width="100%"
+                                                shape="rectangular"
+                                                text="signin_with"
+                                                locale="pt-BR"
+                                            />
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                        </form>
 
-                <div className="text-center mt-4">
-                    <button
-                        onClick={() => navigate("/forgot-password")}
-                        className="text-sm text-blue-600 hover:underline cursor-pointer"
-                    >
-                        Esqueci minha senha
-                    </button>
-                </div>
-            </div>
+                        <div className="text-center space-y-2 pt-2">
+                            <p className="text-sm">
+                                <Link to="/register" className="text-purple-400 hover:underline">Criar conta</Link>
+                                <span className={textMuted}> · </span>
+                                <Link to="/forgot-password" className="text-purple-400 hover:underline">Esqueci minha senha</Link>
+                            </p>
+                            <p className="text-sm">
+                                <Link to="/" className={textMuted}>Voltar ao início</Link>
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+            </main>
         </div>
     );
-};
-
-export default Login;
+}

@@ -18,14 +18,14 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column(type: "integer")]
-    #[Groups(['user_all', 'client_all'])]
+    #[Groups(['user_all'])]
     private int $id;
 
     #[ORM\Column(type: "uuid", unique: true)]
     private ?Uuid $uuid = null;
 
     #[ORM\Column(type: "string", unique: true)]
-    #[Groups(['user_all', 'client_all', 'anamnese_all', 'client_list'])]
+    #[Groups(['user_all'])]
     private string $email;
 
     #[ORM\Column(type: 'json')]
@@ -39,15 +39,15 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private ?string $googleId = null;
 
     #[ORM\Column]
-    #[Groups(['user_all', 'client_all'])]
+    #[Groups(['user_all'])]
     private string $firstName;
 
     #[ORM\Column]
-    #[Groups(['user_all', 'client_all'])]
+    #[Groups(['user_all'])]
     private string $lastName;
 
     #[ORM\Column(type: "datetime_immutable")]
-    #[Groups(['user_all', 'client_all', 'personal_all'])]
+    #[Groups(['user_all'])]
     private \DateTimeImmutable $createdAt;
 
     #[ORM\Column(type: "datetime_immutable", nullable: true)]
@@ -55,27 +55,27 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private ?\DateTimeImmutable $updatedAt = null;
 
     #[ORM\Column(length: 255, nullable: true)]
-    #[Groups(['user_all', 'client_all', 'anamnese_all', 'client_list'])]
+    #[Groups(['user_all'])]
     private ?string $avatarKey = null;
 
     #[ORM\Column(type: 'text', nullable: true)]
-    #[Groups(['user_all', 'client_all', 'anamnese_all', 'client_list'])]
+    #[Groups(['user_all'])]
     private ?string $avatarUrl = null;
 
     #[ORM\Column(length: 50, nullable: true)]
-    #[Groups(['user_all', 'client_all', 'anamnese_all', 'client_list'])]
+    #[Groups(['user_all'])]
     private ?string $phone = null;
 
     #[ORM\Column(type: "date_immutable", nullable: true)]
-    #[Groups(['user_all', 'client_all', 'anamnese_all', 'client_list'])]
+    #[Groups(['user_all'])]
     private ?\DateTimeImmutable $birthDate = null;
 
     #[ORM\Column(length: 1, nullable: true)]
-    #[Groups(['user_all', 'client_all', 'anamnese_all', 'client_list'])]
+    #[Groups(['user_all'])]
     private ?string $gender = null;
 
     #[ORM\Column(type: "boolean", options: ["default" => true])]
-    #[Groups(['user_all', 'client_all', 'anamnese_all', 'client_list'])]
+    #[Groups(['user_all'])]
     private bool $active = true;
 
     #[ORM\Column(type: "datetime_immutable", nullable: true)]
@@ -240,7 +240,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->birthDate;
     }
 
-    #[Groups(['user_all', 'client_all', 'anamnese_all', 'client_list'])]
+    #[Groups(['user_all'])]
     public function getAge(): ?int
     {
         if ($this->birthDate === null) {
