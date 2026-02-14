@@ -5,14 +5,25 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Sparkles, BarChart3, Target, Moon, Sun, Zap, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { fetchPlayer, fetchMatches } from "@/api/lolApi";
+
+const DEFAULT_REGION = "BR1";
+const REGIONS = ["BR1", "NA1", "LA1", "LA2", "LAN1", "LAS1", "EUW1", "EUN1", "TR1", "KR", "JP1", "OC1", "PH2", "SG2", "TH2", "TW2", "VN2"];
 
 export default function HomePage() {
   const [dark, setDark] = useState(true);
   const [gameName, setGameName] = useState("");
   const [tagLine, setTagLine] = useState("");
+  const [region, setRegion] = useState(DEFAULT_REGION);
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState<"idle" | "player" | "matches">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -43,9 +54,9 @@ export default function HomePage() {
       setLoadingStep("player");
       const { puuid } = await fetchPlayer(g, t);
       setLoadingStep("matches");
-      const matches = await fetchMatches(puuid);
+      const matches = await fetchMatches({ puuid, region });
       navigate("/dashboard", {
-        state: { puuid, gameName: g, tagLine: t, matches },
+        state: { puuid, gameName: g, tagLine: t, region, matches },
       });
     } catch (err: unknown) {
       const msg =
@@ -128,9 +139,9 @@ export default function HomePage() {
               <CardContent className="space-y-4 p-6">
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-2 text-left">
-                    <label className={`text-sm ${textMuted}`}>Game Name</label>
+                    <label className={`text-sm ${textMuted}`}>Nome de invocador</label>
                     <Input
-                      placeholder="Ex: Faker"
+                      placeholder="Ex.: Faker"
                       value={gameName}
                       onChange={(e) => setGameName(e.target.value)}
                       disabled={loading}
@@ -138,14 +149,35 @@ export default function HomePage() {
                     />
                   </div>
                   <div className="space-y-2 text-left">
-                    <label className={`text-sm ${textMuted}`}>Tag Line</label>
+                    <label className={`text-sm ${textMuted}`}>Tag</label>
                     <Input
-                      placeholder="Ex: KR1"
+                      placeholder="Ex.: BR1"
                       value={tagLine}
                       onChange={(e) => setTagLine(e.target.value)}
                       disabled={loading}
                       className={inputClass}
                     />
+                  </div>
+                  <div className="space-y-2 text-left">
+                    <label htmlFor="region-select" className={`text-sm ${textMuted}`}>Região</label>
+                    <Select
+                      value={region}
+                      onValueChange={setRegion}
+                      disabled={loading}
+                    >
+                      <SelectTrigger id="region-select" className={`w-full ${textPrimary}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent
+                        className={isDark ? "bg-zinc-900 border-white/10 text-zinc-100" : "bg-white border-zinc-200 text-zinc-900"}
+                      >
+                        {REGIONS.map((r) => (
+                          <SelectItem key={r} value={r}>
+                            {r}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   {error && (
                     <p className="text-sm text-red-400">{error}</p>
@@ -168,7 +200,7 @@ export default function HomePage() {
                     )}
                   </Button>
                 </form>
-                <p className={`text-xs ${textMuted}`}>Não precisa de login. Resultados em segundos.</p>
+                <p className={`text-xs ${textMuted}`}>Não é necessário login. Resultados em segundos.</p>
               </CardContent>
             </Card>
           </motion.div>
@@ -180,7 +212,7 @@ export default function HomePage() {
               isDark={isDark}
               icon={<BarChart3 className="h-6 w-6 text-purple-400" />}
               title="Métricas profissionais"
-              description="CS/min, KP, damage e muito mais."
+              description="CS/min, part. em abates, dano e muito mais."
             />
             <FeatureCard
               isDark={isDark}

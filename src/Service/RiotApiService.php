@@ -8,10 +8,125 @@ class RiotApiService
 {
     private const BASE_AMERICAS = 'https://americas.api.riotgames.com';
 
+    private const POSITION_MAP = [
+        'TOP' => 'TOP',
+        'JUNGLE' => 'JUNGLE',
+        'MIDDLE' => 'MID',
+        'MID' => 'MID',
+        'BOTTOM' => 'BOTTOM',
+        'ADC' => 'BOTTOM',
+        'UTILITY' => 'UTILITY',
+        'SUPPORT' => 'UTILITY',
+    ];
+
     public function __construct(
         private readonly HttpClientInterface $httpClient,
-        private readonly string $riotApiKey
+        private readonly string $riotApiKey,
+        private readonly MatchScoreCalculator $matchScoreCalculator
     ) {}
+
+    private function getRegionalBaseUrl(?string $platform): string
+    {
+        if ($platform === null || $platform === '') {
+            return self::BASE_AMERICAS;
+        }
+        $region = RiotRegionResolver::platformToRegion($platform);
+        return RiotRegionResolver::regionBaseUrl($region);
+    }
+
+    private function getPlatformBaseUrl(string $platform): string
+    {
+        return RiotRegionResolver::platformBaseUrl($platform);
+    }
+
+    /**
+     * League-v4: entries by queue, tier, division (paginated).
+     * Queue: RANKED_SOLO_5x5 | RANKED_FLEX_SR. Tier: IRON..CHALLENGER. Division: I, II, III, IV.
+     *
+     * @return array<int, array{summonerId: string, leaguePoints: int, wins: int, losses: int, tier: string, rank: string, queueType: string, ...}>
+     */
+    public function getLeagueEntries(string $platform, string $queue, string $tier, string $division, int $page = 1): array
+    {
+        $base = $this->getPlatformBaseUrl($platform);
+        $url = $base . '/lol/league/v4/entries/' . rawurlencode($queue) . '/' . rawurlencode($tier) . '/' . rawurlencode($division);
+        $response = $this->httpClient->request('GET', $url, [
+            'headers' => ['X-Riot-Token' => $this->riotApiKey],
+            'query' => ['page' => $page],
+        ]);
+        return $response->toArray();
+    }
+
+    /**
+     * League-v4: Master league by queue (no division).
+     *
+     * @return array{leagueId: string, tier: string, entries: array<int, array{summonerId: string, tier: string, rank: string, ...}>}
+     */
+    public function getMasterLeague(string $platform, string $queue): array
+    {
+        $base = $this->getPlatformBaseUrl($platform);
+        $response = $this->httpClient->request('GET', $base . '/lol/league/v4/masterleagues/by-queue/' . rawurlencode($queue), [
+            'headers' => ['X-Riot-Token' => $this->riotApiKey],
+        ]);
+        return $response->toArray();
+    }
+
+    /**
+     * League-v4: Grandmaster league by queue.
+     *
+     * @return array{leagueId: string, tier: string, entries: array<int, array{summonerId: string, tier: string, rank: string, ...}>}
+     */
+    public function getGrandmasterLeague(string $platform, string $queue): array
+    {
+        $base = $this->getPlatformBaseUrl($platform);
+        $response = $this->httpClient->request('GET', $base . '/lol/league/v4/grandmasterleagues/by-queue/' . rawurlencode($queue), [
+            'headers' => ['X-Riot-Token' => $this->riotApiKey],
+        ]);
+        return $response->toArray();
+    }
+
+    /**
+     * League-v4: Challenger league by queue.
+     *
+     * @return array{leagueId: string, tier: string, entries: array<int, array{summonerId: string, tier: string, rank: string, ...}>}
+     */
+    public function getChallengerLeague(string $platform, string $queue): array
+    {
+        $base = $this->getPlatformBaseUrl($platform);
+        $response = $this->httpClient->request('GET', $base . '/lol/league/v4/challengerleagues/by-queue/' . rawurlencode($queue), [
+            'headers' => ['X-Riot-Token' => $this->riotApiKey],
+        ]);
+        return $response->toArray();
+    }
+
+    /**
+     * Summoner-v4: get summoner by encrypted PUUID. Returns id (summonerId), puuid, etc.
+     *
+     * @return array{id: string, accountId: string, puuid: string, name: string, profileIconId: int, revisionDate: int, summonerLevel: int}
+     */
+    public function getSummonerByPuuid(string $platform, string $puuid): array
+    {
+        $base = $this->getPlatformBaseUrl($platform);
+        $encrypted = rawurlencode($puuid);
+        $response = $this->httpClient->request('GET', $base . '/lol/summoner/v4/summoners/by-puuid/' . $encrypted, [
+            'headers' => ['X-Riot-Token' => $this->riotApiKey],
+        ]);
+        return $response->toArray();
+    }
+
+    /**
+     * League-v4: all league entries for a summoner (all queues). Returns array of LeagueEntryDTO.
+     *
+     * @return array<int, array{tier: string, rank: string, queueType: string, leaguePoints: int, ...}>
+     */
+    public function getLeagueEntriesByPuuid(string $platform, string $puuid): array
+    {
+        $base = $this->getPlatformBaseUrl($platform);
+        $encrypted = rawurlencode($puuid);
+        $response = $this->httpClient->request('GET', $base . '/lol/league/v4/entries/by-puuid/' . $encrypted, [
+            'headers' => ['X-Riot-Token' => $this->riotApiKey],
+        ]);
+        return $response->toArray();
+    }
 
     public function getPuuidByRiotId(string $gameName, string $tagLine): string
     {
@@ -32,27 +147,30 @@ class RiotApiService
     /**
      * @return string[]
      */
-    public function getMatchIdsByPuuid(string $puuid, int $count = 10): array
+    public function getMatchIdsByPuuid(string $puuid, int $count = 10, ?string $platform = null): array
     {
-        $response = $this->httpClient->request('GET', self::BASE_AMERICAS . "/lol/match/v5/matches/by-puuid/{$puuid}/ids", [
+        $base = $this->getRegionalBaseUrl($platform);
+        $response = $this->httpClient->request('GET', $base . "/lol/match/v5/matches/by-puuid/{$puuid}/ids", [
             'headers' => ['X-Riot-Token' => $this->riotApiKey],
             'query' => ['count' => $count],
         ]);
         return $response->toArray();
     }
 
-    public function getMatchById(string $matchId): array
+    public function getMatchById(string $matchId, ?string $platform = null): array
     {
-        $response = $this->httpClient->request('GET', self::BASE_AMERICAS . "/lol/match/v5/matches/{$matchId}", [
+        $base = $this->getRegionalBaseUrl($platform);
+        $response = $this->httpClient->request('GET', $base . "/lol/match/v5/matches/{$matchId}", [
             'headers' => ['X-Riot-Token' => $this->riotApiKey],
         ]);
         return $response->toArray();
     }
 
-    public function getMatchTimeline(string $matchId): ?array
+    public function getMatchTimeline(string $matchId, ?string $platform = null): ?array
     {
+        $base = $this->getRegionalBaseUrl($platform);
         try {
-            $response = $this->httpClient->request('GET', self::BASE_AMERICAS . "/lol/match/v5/matches/{$matchId}/timeline", [
+            $response = $this->httpClient->request('GET', $base . "/lol/match/v5/matches/{$matchId}/timeline", [
                 'headers' => ['X-Riot-Token' => $this->riotApiKey],
             ]);
             return $response->toArray();
@@ -62,17 +180,50 @@ class RiotApiService
     }
 
     /**
-     * @return array{ matchId: string, champion: string, championId: int, result: bool, kda: string, csPerMin: float, damagePerMin: float, visionScore: float, deaths: int, earlyDeaths: int, soloDeaths: int, killParticipation: ?float, goldPerMin: ?float, score: string, gameDuration: ?int }
+     * Build metrics from already-fetched match payload (and optional timeline). Use to avoid double fetch when enriching sample.
+     *
+     * @return array{ matchId: string, champion: string, championId: int, result: bool, kda: string, csPerMin: float, damagePerMin: float, visionScore: float, deaths: int, earlyDeaths: int, soloDeaths: int, killParticipation: ?float, goldPerMin: ?float, score: string, gameDuration: ?int, queueId: ?int, teamPosition: string, opponentChampionId: ?int }
      */
-    public function buildMatchMetrics(string $matchId, string $puuid): array
+    public function buildMatchMetricsFromPayload(array $matchPayload, ?array $timeline, string $puuid, ?string $platform = null): array
     {
-        $match = $this->getMatchById($matchId);
-        $timeline = $this->getMatchTimeline($matchId);
+        $matchId = (string) ($matchPayload['metadata']['matchId'] ?? $matchPayload['info']['gameId'] ?? '');
+        if ($matchId === '') {
+            throw new \RuntimeException('Match payload missing matchId');
+        }
+        if ($timeline === null) {
+            $timeline = $this->getMatchTimeline($matchId, $platform);
+        }
+        return $this->buildMetricsFromMatchInfo($matchPayload['info'] ?? [], $matchId, $timeline, $puuid);
+    }
+
+    /**
+     * @return array{ matchId: string, champion: string, championId: int, result: bool, kda: string, csPerMin: float, damagePerMin: float, visionScore: float, deaths: int, earlyDeaths: int, soloDeaths: int, killParticipation: ?float, goldPerMin: ?float, score: string, gameDuration: ?int, queueId: ?int, teamPosition: string, opponentChampionId: ?int }
+     */
+    public function buildMatchMetrics(string $matchId, string $puuid, ?string $platform = null): array
+    {
+        $match = $this->getMatchById($matchId, $platform);
+        $timeline = $this->getMatchTimeline($matchId, $platform);
         $info = $match['info'] ?? [];
+        $queueId = isset($info['queueId']) ? (int) $info['queueId'] : null;
+        $gameDuration = (int) ($info['gameDuration'] ?? 0);
+        $result = $this->buildMetricsFromMatchInfo($info, $matchId, $timeline, $puuid);
+        $result['gameDuration'] = $gameDuration > 0 ? $gameDuration : null;
+        $result['queueId'] = $queueId;
+        $result['gameEndTimestamp'] = $result['gameEndTimestamp'] ?? (isset($info['gameEndTimestamp']) ? (int) $info['gameEndTimestamp'] : (isset($info['gameCreation']) ? (int) $info['gameCreation'] : null));
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $info match['info']
+     * @return array{ matchId: string, champion: string, championId: int, result: bool, kda: string, csPerMin: float, damagePerMin: float, visionScore: float, deaths: int, earlyDeaths: int, soloDeaths: int, killParticipation: ?float, goldPerMin: ?float, score: string, gameDuration: ?int, queueId: ?int, teamPosition: string, opponentChampionId: ?int }
+     */
+    private function buildMetricsFromMatchInfo(array $info, string $matchId, ?array $timeline, string $puuid): array
+    {
         $participants = $info['participants'] ?? [];
         $gameDuration = (int) ($info['gameDuration'] ?? 0);
         $queueId = isset($info['queueId']) ? (int) $info['queueId'] : null;
         $gameDurationMinutes = $gameDuration > 0 ? $gameDuration / 60.0 : 1.0;
+        $gameEndTimestamp = isset($info['gameEndTimestamp']) ? (int) $info['gameEndTimestamp'] : (isset($info['gameCreation']) ? (int) $info['gameCreation'] : null);
 
         $participant = null;
         foreach ($participants as $p) {
@@ -103,6 +254,8 @@ class RiotApiService
         $championName = $participant['championName'] ?? 'Unknown';
         $championId = (int) ($participant['championId'] ?? 0);
         $win = (bool) ($participant['win'] ?? false);
+        $teamPosition = $this->normalizePosition($participant['teamPosition'] ?? $participant['individualPosition'] ?? '');
+        $opponentChampionId = $this->findOpponentChampionId($participants, $teamId, $teamPosition);
 
         $csPerMin = $gameDurationMinutes > 0 ? $totalCs / $gameDurationMinutes : 0.0;
         $damagePerMin = $gameDurationMinutes > 0 ? $totalDamage / $gameDurationMinutes : 0.0;
@@ -137,7 +290,20 @@ class RiotApiService
             }
         }
 
-        $score = $this->calculateScore($csPerMin, $deaths, $damagePerMin, $visionScore, $killParticipation ?? 0);
+        $metricsForScore = [
+            'csPerMin' => $csPerMin,
+            'deaths' => $deaths,
+            'damagePerMin' => $damagePerMin,
+            'visionScore' => $visionScore,
+            'killParticipation' => $killParticipation,
+        ];
+        $contextForScore = [
+            'teamPosition' => $teamPosition,
+            'champion' => $championName,
+            'championId' => $championId,
+            'gameDurationSeconds' => $gameDuration > 0 ? $gameDuration : null,
+        ];
+        $score = $this->matchScoreCalculator->calculateScore($metricsForScore, $contextForScore);
 
         return [
             'matchId' => $matchId,
@@ -154,27 +320,36 @@ class RiotApiService
             'killParticipation' => $killParticipation !== null ? round($killParticipation, 2) : null,
             'goldPerMin' => round($goldPerMin, 2),
             'score' => $score,
-            'gameDuration' => $gameDuration,
+            'gameDuration' => $gameDuration > 0 ? $gameDuration : null,
+            'gameEndTimestamp' => $gameEndTimestamp,
             'queueId' => $queueId,
+            'teamPosition' => $teamPosition,
+            'opponentChampionId' => $opponentChampionId,
         ];
     }
 
-    private function calculateScore(float $csPerMin, int $deaths, float $damagePerMin, float $visionScore, float $killParticipation): string
+    private function normalizePosition(string $position): string
     {
-        $csNorm = min(10, max(0, $csPerMin)) / 10.0;
-        $deathsNorm = max(0, 1.0 - ($deaths / 15.0));
-        $damageNorm = min(1.0, $damagePerMin / 1000.0);
-        $visionNorm = min(1.0, $visionScore / 60.0);
-        $kpNorm = min(1.0, $killParticipation / 100.0);
+        $key = strtoupper(trim($position));
+        return self::POSITION_MAP[$key] ?? 'UTILITY';
+    }
 
-        $raw = $csNorm * 0.25 + $deathsNorm * 0.25 + $damageNorm * 0.20 + $visionNorm * 0.15 + $kpNorm * 0.15;
-        $raw = max(0, min(1, $raw));
-
-        if ($raw >= 0.9) return 'S';
-        if ($raw >= 0.75) return 'A';
-        if ($raw >= 0.55) return 'B';
-        if ($raw >= 0.35) return 'C';
-        return 'D';
+    /**
+     * @param array<int, array<string, mixed>> $participants
+     */
+    private function findOpponentChampionId(array $participants, int $myTeamId, string $myPosition): ?int
+    {
+        foreach ($participants as $p) {
+            $teamId = (int) ($p['teamId'] ?? 0);
+            if ($teamId === $myTeamId) {
+                continue;
+            }
+            $pos = $this->normalizePosition($p['teamPosition'] ?? $p['individualPosition'] ?? '');
+            if ($pos === $myPosition) {
+                return (int) ($p['championId'] ?? 0);
+            }
+        }
+        return null;
     }
 
     /**

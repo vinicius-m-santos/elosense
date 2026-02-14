@@ -25,7 +25,8 @@ class PlayerMatchRepository extends ServiceEntityRepository
             ->join('m.player', 'p')
             ->where('p.puuid = :puuid')
             ->setParameter('puuid', $puuid)
-            ->orderBy('m.id', 'DESC')
+            ->orderBy('m.gameEndTimestamp', 'DESC')
+            ->addOrderBy('m.id', 'DESC')
             ->setMaxResults($limit)
             ->getQuery()
             ->getResult();

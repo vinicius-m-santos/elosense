@@ -65,8 +65,18 @@ class PlayerMatch
     #[ORM\Column(type: 'integer', nullable: true)]
     private ?int $gameDuration = null;
 
+    /** Match end time in milliseconds (epoch). For ordering and "time ago" display. */
+    #[ORM\Column(type: 'bigint', nullable: true)]
+    private ?int $gameEndTimestamp = null;
+
     #[ORM\Column(type: 'integer', nullable: true)]
     private ?int $queueId = null;
+
+    #[ORM\Column(type: 'string', length: 20, nullable: true)]
+    private ?string $teamPosition = null;
+
+    #[ORM\Column(type: Types::INTEGER, nullable: true)]
+    private ?int $opponentChampionId = null;
 
     public function getMatchId(): string
     {
@@ -244,6 +254,17 @@ class PlayerMatch
         return $this;
     }
 
+    public function getGameEndTimestamp(): ?int
+    {
+        return $this->gameEndTimestamp;
+    }
+
+    public function setGameEndTimestamp(?int $gameEndTimestamp): static
+    {
+        $this->gameEndTimestamp = $gameEndTimestamp;
+        return $this;
+    }
+
     public function getQueueId(): ?int
     {
         return $this->queueId;
@@ -252,6 +273,28 @@ class PlayerMatch
     public function setQueueId(?int $queueId): static
     {
         $this->queueId = $queueId;
+        return $this;
+    }
+
+    public function getTeamPosition(): ?string
+    {
+        return $this->teamPosition;
+    }
+
+    public function setTeamPosition(?string $teamPosition): static
+    {
+        $this->teamPosition = $teamPosition;
+        return $this;
+    }
+
+    public function getOpponentChampionId(): ?int
+    {
+        return $this->opponentChampionId;
+    }
+
+    public function setOpponentChampionId(?int $opponentChampionId): static
+    {
+        $this->opponentChampionId = $opponentChampionId;
         return $this;
     }
 }

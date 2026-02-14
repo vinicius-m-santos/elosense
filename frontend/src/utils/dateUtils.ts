@@ -65,3 +65,31 @@ export function calculateAgeFromBirthDate(
   }
   return age >= 0 ? age : null;
 }
+
+/**
+ * Formata timestamp de partida (ms) para exibição: "X min atrás", "X h atrás", "Ontem" ou "dd/MM".
+ * Usa o fuso local do usuário.
+ */
+export function formatMatchDate(ts: number | null | undefined): string {
+  if (ts == null || ts <= 0) return "";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const matchDayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffMs = now.getTime() - d.getTime();
+  const diffDays = Math.floor((todayStart.getTime() - matchDayStart.getTime()) / (24 * 60 * 60 * 1000));
+
+  if (diffDays === 0) {
+    const diffMin = Math.floor(diffMs / (60 * 1000));
+    if (diffMin < 1) return "Agora";
+    if (diffMin < 60) return `${diffMin} min atrás`;
+    const diffH = Math.floor(diffMin / 60);
+    if (diffH < 24) return `${diffH} h atrás`;
+    return "Hoje";
+  }
+  if (diffDays === 1) return "Ontem";
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  return `${day}/${month}`;
+}

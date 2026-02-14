@@ -8,7 +8,10 @@ import {
 } from "@/components/ui/select";
 import { OBJECTIVES } from "@/utils/constants/Client/constants";
 
-export default function ObjectiveSelect({ value, handleChange }) {
+const selectContentClass = (dark: boolean) =>
+    dark ? "bg-zinc-900 border-white/10 text-zinc-100" : "bg-white border-zinc-200 text-zinc-900";
+
+export default function ObjectiveSelect({ value, handleChange, dark = false }) {
     return (
         <>
             <Label
@@ -25,8 +28,7 @@ export default function ObjectiveSelect({ value, handleChange }) {
                     <SelectTrigger>
                         <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
-
-                    <SelectContent>
+                    <SelectContent className={selectContentClass(dark)}>
                         {Object.entries(OBJECTIVES).map(([key, label]) => (
                             <SelectItem key={key} value={key}>
                                 {label}
