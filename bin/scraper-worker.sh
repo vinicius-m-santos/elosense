@@ -10,7 +10,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_DIR"
 
 REGION="${SCRAPER_REGION:-BR1}"
-QUEUE="${SCRAPER_QUEUE:-420}"
+QUEUE="${SCRAPER_QUEUE:-all}"
 SLEEP_SECONDS="${SCRAPER_LOOP_SLEEP_SECONDS:-3600}"
 
 echo "[scraper-worker] Starting. Region=$REGION Queue=$QUEUE Sleep=${SLEEP_SECONDS}s"

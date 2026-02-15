@@ -43,7 +43,7 @@ final class ScraperRankedSampleCommand extends Command
     {
         $this
             ->addOption('region', 'r', InputOption::VALUE_REQUIRED, 'Platform/region (e.g. BR1, NA1, KR)')
-            ->addOption('queue', null, InputOption::VALUE_OPTIONAL, 'Queue: 420 (Solo) or 440 (Flex)', '420')
+            ->addOption('queue', null, InputOption::VALUE_OPTIONAL, 'Queue: 420 (Solo), 440 (Flex), or all (run 420 then 440)', '420')
             ->addOption('players-per-stratum', null, InputOption::VALUE_OPTIONAL, 'Players to sample per tier+rank', '20')
             ->addOption('matches-per-player', null, InputOption::VALUE_OPTIONAL, 'Match IDs to fetch per player', '5')
             ->addOption('seed', null, InputOption::VALUE_OPTIONAL, 'Random seed for reproducible sampling (optional)')
@@ -56,11 +56,7 @@ final class ScraperRankedSampleCommand extends Command
         $io = new SymfonyStyle($input, $output);
         $region = strtoupper((string) $input->getOption('region'));
         $queueOpt = (string) $input->getOption('queue');
-        $queueId = (int) $queueOpt;
-        $queueName = self::QUEUE_MAP[$queueId] ?? 'RANKED_SOLO_5x5';
-        if (!isset(self::QUEUE_MAP[$queueId])) {
-            $queueId = 420;
-        }
+        $queueIds = $this->resolveQueueIds($queueOpt);
         $playersPerStratum = (int) $input->getOption('players-per-stratum');
         $matchesPerPlayer = (int) $input->getOption('matches-per-player');
         $seed = $input->getOption('seed');
@@ -79,118 +75,137 @@ final class ScraperRankedSampleCommand extends Command
         }
 
         $platform = strtolower($region);
-        $stateFile = $this->kernel->getProjectDir() . '/var/scraper_state_' . $platform . '_' . $queueId . '.json';
-        $state = $noResume ? null : $this->loadState($stateFile);
         $strata = $this->buildStrata();
-        $startIndex = $this->findStartIndex($strata, $state);
-
-        $io->title('Ranked sample scraper');
-        $io->table([], [
-            ['Region', $region],
-            ['Queue', $queueName . ' (' . $queueId . ')'],
-            ['Players per stratum', (string) $playersPerStratum],
-            ['Matches per player', (string) $matchesPerPlayer],
-            ['Seed', $seed !== null ? $seed : 'none (first N)'],
-            ['Resume', $noResume ? 'no' : ($state ? 'yes' : 'no')],
-            ['Strata total', (string) \count($strata)],
-            ['Starting at stratum', $startIndex + 1 . ' / ' . \count($strata)],
-        ]);
-
-        if ($startIndex >= \count($strata)) {
-            $io->success('All strata already completed for this region/queue. Nothing to do. Use --no-resume to start from the beginning.');
-            return Command::SUCCESS;
-        }
-
         $totalNewMatches = 0;
         $totalPlayers = 0;
 
-        for ($i = $startIndex; $i < \count($strata); $i++) {
-            [$tier, $rank] = $strata[$i];
-            $tierRankLabel = $rank !== null ? $tier . ' ' . $rank : $tier;
-            $io->section('Stratum: ' . $tierRankLabel);
+        foreach ($queueIds as $queueId) {
+            $queueName = self::QUEUE_MAP[$queueId];
+            $stateFile = $this->kernel->getProjectDir() . '/var/scraper_state_' . $platform . '_' . $queueId . '.json';
+            $state = $noResume ? null : $this->loadState($stateFile);
+            $startIndex = $this->findStartIndex($strata, $state);
 
-            $this->throttler->waitIfNeeded();
-            $entries = $this->fetchEntries($platform, $queueName, $tier, $rank);
-            $this->throttler->recordRequest();
-            if ($entries === []) {
-                $io->writeln('  No entries.');
-                $this->saveState($stateFile, $tier, $rank);
+            $io->title('Ranked sample scraper — ' . $queueName . ' (' . $queueId . ')');
+            $io->table([], [
+                ['Region', $region],
+                ['Queue', $queueName . ' (' . $queueId . ')'],
+                ['Players per stratum', (string) $playersPerStratum],
+                ['Matches per player', (string) $matchesPerPlayer],
+                ['Seed', $seed !== null ? $seed : 'none (first N)'],
+                ['Resume', $noResume ? 'no' : ($state ? 'yes' : 'no')],
+                ['Strata total', (string) \count($strata)],
+                ['Starting at stratum', $startIndex + 1 . ' / ' . \count($strata)],
+            ]);
+
+            if ($startIndex >= \count($strata)) {
+                $io->success('All strata already completed for this region/queue. Use --no-resume to start from the beginning.');
                 continue;
             }
 
-            $sampled = $this->sampleEntries($entries, $playersPerStratum, $seed !== null ? (int) $seed + $i : null);
-            $io->writeln('  Sampled ' . \count($sampled) . ' players.');
+            for ($i = $startIndex; $i < \count($strata); $i++) {
+                [$tier, $rank] = $strata[$i];
+                $tierRankLabel = $rank !== null ? $tier . ' ' . $rank : $tier;
+                $io->section('Stratum: ' . $tierRankLabel);
 
-            foreach ($sampled as $entry) {
-                $entryArr = \is_array($entry) ? $entry : (array) $entry;
-                $entryTier = $entryArr['tier'] ?? $tier;
-                $entryRank = $entryArr['rank'] ?? ($rank ?? 'I');
-                $queueType = $entryArr['queueType'] ?? $queueName;
+                $throttleType = $rank !== null
+                    ? RiotApiThrottler::TYPE_LEAGUE_ENTRIES
+                    : RiotApiThrottler::TYPE_LEAGUE_MASTER_GM_CHALLENGER;
+                $this->throttler->waitIfNeeded($throttleType);
+                $entries = $this->fetchEntries($platform, $queueName, $tier, $rank);
+                $this->throttler->recordRequest($throttleType);
+                if ($entries === []) {
+                    $io->writeln('  No entries.');
+                    $this->saveState($stateFile, $tier, $rank);
+                    continue;
+                }
 
-                $puuid = $this->getPuuidFromEntry($entryArr);
-                if ($puuid === null || $puuid === '') {
-                    $summonerId = $this->getSummonerIdFromEntry($entryArr);
-                    if ($summonerId !== null && $summonerId !== '') {
-                        $this->throttler->waitIfNeeded();
-                        try {
-                            $summoner = $this->riotApi->getSummonerBySummonerId($platform, $summonerId);
-                            $puuid = $summoner['puuid'] ?? null;
-                        } catch (\Throwable $e) {
-                            $io->writeln('  <comment>Summoner error: ' . $e->getMessage() . '</comment>');
-                            $this->throttler->recordRequest();
-                        }
-                        if ($puuid !== null) {
-                            $this->throttler->recordRequest();
+                $sampled = $this->sampleEntries($entries, $playersPerStratum, $seed !== null ? (int) $seed + $i : null);
+                $io->writeln('  Sampled ' . \count($sampled) . ' players.');
+
+                foreach ($sampled as $entry) {
+                    $entryArr = \is_array($entry) ? $entry : (array) $entry;
+                    $entryTier = $entryArr['tier'] ?? $tier;
+                    $entryRank = $entryArr['rank'] ?? ($rank ?? 'I');
+                    $queueType = $entryArr['queueType'] ?? $queueName;
+
+                    $puuid = $this->getPuuidFromEntry($entryArr);
+                    if ($puuid === null || $puuid === '') {
+                        $summonerId = $this->getSummonerIdFromEntry($entryArr);
+                        if ($summonerId !== null && $summonerId !== '') {
+                            $this->throttler->waitIfNeeded(RiotApiThrottler::TYPE_SUMMONER);
+                            try {
+                                $summoner = $this->riotApi->getSummonerBySummonerId($platform, $summonerId);
+                                $puuid = $summoner['puuid'] ?? null;
+                            } catch (\Throwable $e) {
+                                $io->writeln('  <comment>Summoner error: ' . $e->getMessage() . '</comment>');
+                            }
+                            $this->throttler->recordRequest(RiotApiThrottler::TYPE_SUMMONER);
                         }
                     }
-                }
-                if ($puuid === null || $puuid === '') {
-                    continue;
-                }
-
-                $this->samplePlayerRepository->upsert($puuid, $region, $entryTier, $entryRank, $queueType);
-                $this->samplePlayerRepository->getEntityManager()->flush();
-                $totalPlayers++;
-
-                $this->throttler->waitIfNeeded();
-                try {
-                    $matchIds = $this->runWith429Retry($io, fn () => $this->riotApi->getMatchIdsByPuuid($puuid, $matchesPerPlayer, $platform), 'MatchIds', $retryAfterDefault);
-                } catch (\Throwable $e) {
-                    $io->writeln('  <comment>MatchIds error: ' . $e->getMessage() . '</comment>');
-                    $this->throttler->recordRequest();
-                    continue;
-                }
-                $this->throttler->recordRequest();
-
-                $newInStratum = 0;
-                foreach ($matchIds as $matchId) {
-                    if ($this->sampleStorage->matchExistsInSample($matchId, $region)) {
+                    if ($puuid === null || $puuid === '') {
                         continue;
                     }
-                    $this->throttler->waitIfNeeded();
+
+                    $this->samplePlayerRepository->upsert($puuid, $region, $entryTier, $entryRank, $queueType);
+                    $this->samplePlayerRepository->getEntityManager()->flush();
+                    $totalPlayers++;
+
+                    $this->throttler->waitIfNeeded(RiotApiThrottler::TYPE_MATCH_V5);
                     try {
-                        $matchPayload = $this->runWith429Retry($io, fn () => $this->riotApi->getMatchById($matchId, $platform), 'Match', $retryAfterDefault);
+                        $matchIds = $this->runWith429Retry($io, fn () => $this->riotApi->getMatchIdsByPuuid($puuid, $matchesPerPlayer, $platform), 'MatchIds', $retryAfterDefault);
                     } catch (\Throwable $e) {
-                        $this->throttler->recordRequest();
+                        $io->writeln('  <comment>MatchIds error: ' . $e->getMessage() . '</comment>');
+                        $this->throttler->recordRequest(RiotApiThrottler::TYPE_MATCH_V5);
                         continue;
                     }
-                    $this->throttler->recordRequest();
+                    $this->throttler->recordRequest(RiotApiThrottler::TYPE_MATCH_V5);
 
-                    $this->sampleStorage->persistMatchPayload($matchPayload, $region, $puuid, $entryTier, $entryRank);
-                    $totalNewMatches++;
-                    $newInStratum++;
+                    $newInStratum = 0;
+                    foreach ($matchIds as $matchId) {
+                        if ($this->sampleStorage->matchExistsInSample($matchId, $region)) {
+                            continue;
+                        }
+                        $this->throttler->waitIfNeeded(RiotApiThrottler::TYPE_MATCH_V5);
+                        try {
+                            $matchPayload = $this->runWith429Retry($io, fn () => $this->riotApi->getMatchById($matchId, $platform), 'Match', $retryAfterDefault);
+                        } catch (\Throwable $e) {
+                            $this->throttler->recordRequest(RiotApiThrottler::TYPE_MATCH_V5);
+                            continue;
+                        }
+                        $this->throttler->recordRequest(RiotApiThrottler::TYPE_MATCH_V5);
+
+                        $this->sampleStorage->persistMatchPayload($matchPayload, $region, $puuid, $entryTier, $entryRank);
+                        $totalNewMatches++;
+                        $newInStratum++;
+                    }
+                    if ($newInStratum > 0) {
+                        $io->writeln('  Player ' . $puuid . ': ' . $newInStratum . ' new match(es).');
+                    }
                 }
-                if ($newInStratum > 0) {
-                    $io->writeln('  Player ' . $puuid . ': ' . $newInStratum . ' new match(es).');
-                }
+
+                $io->writeln('  Stratum done. Total new matches so far: ' . $totalNewMatches . '.');
+                $this->saveState($stateFile, $tier, $rank);
             }
-
-            $io->writeln('  Stratum done. Total new matches so far: ' . $totalNewMatches . '.');
-            $this->saveState($stateFile, $tier, $rank);
         }
 
         $io->success('Scraper finished. Total new matches: ' . $totalNewMatches . ', players touched: ' . $totalPlayers . '.');
         return Command::SUCCESS;
+    }
+
+    /**
+     * @return list<int> Queue IDs to run (420, 440, or both in order).
+     */
+    private function resolveQueueIds(string $queueOpt): array
+    {
+        $lower = strtolower(trim($queueOpt));
+        if ($lower === 'all') {
+            return [420, 440];
+        }
+        $id = (int) $queueOpt;
+        if (isset(self::QUEUE_MAP[$id])) {
+            return [$id];
+        }
+        return [420];
     }
 
     /**

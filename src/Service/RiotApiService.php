@@ -114,6 +114,21 @@ class RiotApiService
     }
 
     /**
+     * Summoner-v4: get summoner by encrypted summoner ID (legacy when league entries only return summonerId).
+     *
+     * @return array{id: string, accountId: string, puuid: string, name: string, profileIconId: int, revisionDate: int, summonerLevel: int}
+     */
+    public function getSummonerBySummonerId(string $platform, string $summonerId): array
+    {
+        $base = $this->getPlatformBaseUrl($platform);
+        $encrypted = rawurlencode($summonerId);
+        $response = $this->httpClient->request('GET', $base . '/lol/summoner/v4/summoners/' . $encrypted, [
+            'headers' => ['X-Riot-Token' => $this->riotApiKey],
+        ]);
+        return $response->toArray();
+    }
+
+    /**
      * League-v4: all league entries for a summoner (all queues). Returns array of LeagueEntryDTO.
      *
      * @return array<int, array{tier: string, rank: string, queueType: string, leaguePoints: int, ...}>
