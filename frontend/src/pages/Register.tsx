@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useApi } from "@/api/Api";
 import toast from "react-hot-toast";
-import { Eye, EyeOff, Moon, Sun, Zap, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useNavigate, Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,8 +9,10 @@ import z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
+import { AppHeader } from "@/components/AppHeader";
+import AppFooter from "@/components/AppFooter/AppFooter";
+
+const inputClass = "bg-zinc-50 border-zinc-200 text-zinc-900 focus-visible:ring-purple-500 dark:bg-white/5 dark:border-white/10 dark:text-zinc-100";
 
 const registerSchema = z
     .object({
@@ -32,7 +34,6 @@ const registerSchema = z
 type RegisterFormData = z.infer<typeof registerSchema>;
 
 export default function Register() {
-    const [dark, setDark] = useState(true);
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -56,17 +57,6 @@ export default function Register() {
     useEffect(() => {
         if (confirmPassword) trigger("confirmPassword");
     }, [password, confirmPassword, trigger]);
-
-    const isDark = dark;
-    const textPrimary = isDark ? "text-zinc-100" : "text-zinc-900";
-    const textMuted = isDark ? "text-zinc-500" : "text-zinc-500";
-    const bgMain = isDark ? "bg-zinc-950" : "bg-zinc-100";
-    const glassCard = isDark
-        ? "border-white/10 bg-white/5 backdrop-blur-xl"
-        : "border-zinc-200/80 bg-white/80 backdrop-blur-xl";
-    const inputClass = isDark
-        ? "bg-white/5 border-white/10 focus-visible:ring-purple-500 text-zinc-100"
-        : "bg-zinc-50 border-zinc-200 text-zinc-900 focus-visible:ring-purple-500";
 
     const onSubmit = async (data: RegisterFormData) => {
         setLoading(true);
@@ -93,36 +83,23 @@ export default function Register() {
     };
 
     return (
-        <div className={`min-h-screen w-full transition-colors duration-500 ${bgMain} ${textPrimary}`}>
+        <div className="min-h-screen w-full transition-colors duration-500 bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
             <div className="pointer-events-none fixed inset-0 overflow-hidden">
                 <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[500px] w-[500px] rounded-full bg-purple-600/20 blur-[120px]" />
                 <div className="absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-blue-600/20 blur-[120px]" />
             </div>
 
-            <header className={`relative z-10 border-b ${isDark ? "border-white/5" : "border-zinc-200/80"} backdrop-blur-xl`}>
-                <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-                    <div className="flex items-center gap-2 font-semibold tracking-tight">
-                        <Zap className="h-5 w-5 text-purple-400" />
-                        <span className="text-lg">EloSense</span>
-                        <Badge className="ml-2 bg-purple-500/10 text-purple-400 border-purple-500/20">Criar conta</Badge>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <Sun className={`h-4 w-4 ${isDark ? "opacity-60 text-zinc-400" : "text-zinc-600"}`} />
-                        <Switch checked={dark} onCheckedChange={setDark} />
-                        <Moon className={`h-4 w-4 ${isDark ? "opacity-60 text-zinc-400" : "text-zinc-600"}`} />
-                    </div>
-                </div>
-            </header>
+            <AppHeader backTo="/" badgeLabel="Criar conta" maxWidth="max-w-6xl" />
 
             <main className="relative z-10 flex flex-col items-center justify-center px-6 py-16">
-                <Card className={`w-full max-w-sm ${glassCard}`}>
+                <Card className="w-full max-w-sm border-zinc-200/80 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
                     <CardContent className="p-6 space-y-4">
-                        <h2 className={`text-xl font-semibold ${textPrimary} text-center`}>Criar conta</h2>
-                        <p className={`text-center text-sm ${textMuted} mb-4`}>Preencha os dados para se cadastrar</p>
+                        <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 text-center">Criar conta</h2>
+                        <p className="text-center text-sm text-zinc-500 mb-4">Preencha os dados para se cadastrar</p>
 
                         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                             <div className="space-y-2">
-                                <label htmlFor="name" className={`text-sm ${textMuted}`}>Nome</label>
+                                <label htmlFor="name" className="text-sm text-zinc-500">Nome</label>
                                 <Input
                                     id="name"
                                     type="text"
@@ -135,7 +112,7 @@ export default function Register() {
                                 )}
                             </div>
                             <div className="space-y-2">
-                                <label htmlFor="email" className={`text-sm ${textMuted}`}>Email</label>
+                                <label htmlFor="email" className="text-sm text-zinc-500">Email</label>
                                 <Input
                                     id="email"
                                     type="email"
@@ -148,7 +125,7 @@ export default function Register() {
                                 )}
                             </div>
                             <div className="space-y-2">
-                                <label htmlFor="password" className={`text-sm ${textMuted}`}>Senha</label>
+                                <label htmlFor="password" className="text-sm text-zinc-500">Senha</label>
                                 <div className="relative">
                                     <Input
                                         id="password"
@@ -172,7 +149,7 @@ export default function Register() {
                                 )}
                             </div>
                             <div className="space-y-2">
-                                <label htmlFor="confirmPassword" className={`text-sm ${textMuted}`}>Confirmar senha</label>
+                                <label htmlFor="confirmPassword" className="text-sm text-zinc-500">Confirmar senha</label>
                                 <div className="relative">
                                     <Input
                                         id="confirmPassword"
@@ -204,15 +181,16 @@ export default function Register() {
                             </Button>
                         </form>
 
-                        <p className={`text-center text-sm ${textMuted} pt-2`}>
+                        <p className="text-center text-sm text-zinc-500 pt-2">
                             Já tem conta? <Link to="/login" className="text-purple-400 hover:underline">Faça login</Link>
                         </p>
                         <p className="text-center text-sm">
-                            <Link to="/" className={textMuted}>Voltar ao início</Link>
+                            <Link to="/" className="text-zinc-500">Voltar ao início</Link>
                         </p>
                     </CardContent>
                 </Card>
             </main>
+            <AppFooter />
         </div>
     );
 }

@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
-  ArrowLeft,
   Sword,
   Coins,
   Eye,
@@ -10,11 +9,8 @@ import {
   TrendingUp,
   AlertTriangle,
   CheckCircle,
-  Zap,
   Loader2,
   HelpCircle,
-  Sun,
-  Moon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,8 +20,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -36,14 +30,36 @@ import {
 import { fetchMatchDetail, fetchPlayerRank, getMatchTips, type MatchSummary } from "@/api/lolApi";
 import { getQueueType, getLaneLabel } from "@/utils/getQueueType";
 import { formatMatchDate } from "@/utils/dateUtils";
-import { useAuth } from "@/providers/AuthProvider";
-import UserDropdown from "@/components/Menu/components/UserDropdown";
-
-const STORAGE_KEY = "elosense_player";
+import { AppHeader } from "@/components/AppHeader";
+import AppFooter from "@/components/AppFooter/AppFooter";
+import { usePlayerStore } from "@/stores/playerStore";
+import { SkeletonMatchDetail } from "@/components/ui/skeleton";
 const TIERS = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "EMERALD", "DIAMOND", "MASTER", "GRANDMASTER", "CHALLENGER"] as const;
+const TIERS_WITHOUT_RANK = ["MASTER", "GRANDMASTER", "CHALLENGER"] as const;
 const RANKS = ["I", "II", "III", "IV"] as const;
 const DEFAULT_COMPARE_TIER = "GOLD";
-const DEFAULT_COMPARE_RANK = "II";
+const DEFAULT_COMPARE_RANK = "I";
+
+const TIER_LABEL_PT: Record<string, string> = {
+  IRON: "Ferro",
+  BRONZE: "Bronze",
+  SILVER: "Prata",
+  GOLD: "Ouro",
+  PLATINUM: "Platina",
+  EMERALD: "Esmeralda",
+  DIAMOND: "Diamante",
+  MASTER: "Mestre",
+  GRANDMASTER: "Grão-Mestre",
+  CHALLENGER: "Desafiante",
+};
+
+function getTierLabelPt(tier: string): string {
+  return TIER_LABEL_PT[tier] ?? tier;
+}
+
+function tierHasRank(tier: string): boolean {
+  return !TIERS_WITHOUT_RANK.includes(tier as (typeof TIERS_WITHOUT_RANK)[number]);
+}
 
 const BENCHMARK_N_TOOLTIP =
   "n = número de partidas usadas para calcular esses benchmarks no elo e posição selecionados. Quanto maior o n, mais confiável a referência.";
@@ -58,23 +74,13 @@ const BENCHMARK_METRIC_TOOLTIPS: Record<string, string> = {
   Mortes: "Número de mortes. Para essa métrica, menos que a mediana é melhor.",
 };
 
-function getStoredPlayer(): { puuid: string; gameName: string; tagLine: string; region?: string; tier?: string; rank?: string } | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as { puuid: string; gameName: string; tagLine: string; region?: string; tier?: string; rank?: string };
-  } catch {
-    return null;
-  }
-}
-
 export default function MatchDetailPageConsistent() {
-  const [dark, setDark] = useState(true);
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = location.state as { puuid: string; gameName: string; tagLine: string; region?: string; tier?: string; rank?: string } | undefined;
-  const state = locationState ?? getStoredPlayer();
+  const storedPlayer = usePlayerStore((s) => s.player);
+  const state = locationState ?? storedPlayer;
 
   const [match, setMatch] = useState<MatchSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,7 +88,6 @@ export default function MatchDetailPageConsistent() {
   const [error, setError] = useState<string | null>(null);
   const [comparisonTier, setComparisonTier] = useState<string>(DEFAULT_COMPARE_TIER);
   const [comparisonRank, setComparisonRank] = useState<string>(DEFAULT_COMPARE_RANK);
-  const { isAuthenticated, user: authUser } = useAuth();
   const [lastFetchedTierRank, setLastFetchedTierRank] = useState<{ tier: string; rank: string } | null>(null);
   const puuid = state?.puuid ?? null;
   const region = state?.region ?? "BR1";
@@ -96,17 +101,25 @@ export default function MatchDetailPageConsistent() {
     setLoading(true);
     setError(null);
     const resolveTierRank = (): Promise<{ tier: string; rank: string }> => {
-      if (state?.tier && state?.rank) return Promise.resolve({ tier: state.tier, rank: state.rank });
+      if (state?.tier !== undefined) {
+        const tier = TIERS.includes(state.tier as (typeof TIERS)[number]) ? state.tier : DEFAULT_COMPARE_TIER;
+        const rank = tierHasRank(tier) && state?.rank && RANKS.includes(state.rank as (typeof RANKS)[number])
+          ? state.rank
+          : tierHasRank(tier) ? DEFAULT_COMPARE_RANK : "";
+        return Promise.resolve({ tier, rank });
+      }
       return fetchPlayerRank(puuid, region).then((r) => {
         const entry = r.entries?.find((e) => e.queueType === "RANKED_SOLO_5x5") ?? r.entries?.[0];
         const tier = entry?.tier && TIERS.includes(entry.tier as (typeof TIERS)[number]) ? entry.tier : DEFAULT_COMPARE_TIER;
-        const rank = entry?.rank && RANKS.includes(entry.rank as (typeof RANKS)[number]) ? entry.rank : DEFAULT_COMPARE_RANK;
+        const rank = tierHasRank(tier) && entry?.rank && RANKS.includes(entry.rank as (typeof RANKS)[number])
+          ? entry.rank
+          : tierHasRank(tier) ? DEFAULT_COMPARE_RANK : "";
         return { tier, rank };
       });
     };
     resolveTierRank()
       .then(({ tier, rank }) =>
-        fetchMatchDetail(matchId, puuid, { region, tier, rank }).then((data) => ({ data, tier, rank }))
+        fetchMatchDetail(matchId, puuid, { region, tier, rank: rank || undefined }).then((data) => ({ data, tier, rank }))
       )
       .then(({ data, tier, rank }) => {
         setMatch(data);
@@ -122,29 +135,22 @@ export default function MatchDetailPageConsistent() {
         );
       })
       .finally(() => setLoading(false));
-  }, [matchId, puuid, state?.region, state?.tier, state?.rank]);
+  }, [matchId, puuid, region, state?.region, state?.tier, state?.rank]);
+
+  const effectiveRank = tierHasRank(comparisonTier) ? comparisonRank : "";
 
   useEffect(() => {
     if (!matchId || !puuid || !match || loading) return;
-    if (lastFetchedTierRank?.tier === comparisonTier && lastFetchedTierRank?.rank === comparisonRank) return;
+    if (lastFetchedTierRank?.tier === comparisonTier && lastFetchedTierRank?.rank === effectiveRank) return;
     setLoadingComparison(true);
-    fetchMatchDetail(matchId, puuid, { region, tier: comparisonTier, rank: comparisonRank })
+    fetchMatchDetail(matchId, puuid, { region, tier: comparisonTier, rank: effectiveRank || undefined })
       .then((data) => {
         setMatch(data);
-        setLastFetchedTierRank({ tier: comparisonTier, rank: comparisonRank });
+        setLastFetchedTierRank({ tier: comparisonTier, rank: effectiveRank });
       })
       .catch(() => { })
       .finally(() => setLoadingComparison(false));
-  }, [matchId, puuid, region, match, loading, comparisonTier, comparisonRank, lastFetchedTierRank?.tier, lastFetchedTierRank?.rank]);
-
-  const isDark = dark;
-  const textPrimary = isDark ? "text-zinc-100" : "text-zinc-900";
-  const textSecondary = isDark ? "text-zinc-400" : "text-zinc-600";
-  const textMuted = isDark ? "text-zinc-500" : "text-zinc-500";
-  const bgMain = isDark ? "bg-zinc-950" : "bg-zinc-100";
-  const glassCard = isDark
-    ? "border-white/10 bg-white/5 backdrop-blur-xl"
-    : "border-zinc-200/80 bg-white/80 backdrop-blur-xl";
+  }, [matchId, puuid, region, match, loading, comparisonTier, comparisonRank, effectiveRank, lastFetchedTierRank?.tier, lastFetchedTierRank?.rank]);
 
   const scoreBadge = (score: string) => {
     const map: Record<string, string> = {
@@ -187,20 +193,29 @@ export default function MatchDetailPageConsistent() {
 
   if (loading) {
     return (
-      <div className={`min-h-screen w-full ${bgMain} ${textPrimary} flex items-center justify-center`}>
-        <div className={`flex items-center gap-2 ${textMuted}`}>
-          <Loader2 className="h-6 w-6 animate-spin" />
-          Calculando métricas…
+      <div className="min-h-screen w-full transition-colors duration-500 bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
+        <div className="pointer-events-none fixed inset-0 overflow-hidden">
+          <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[500px] w-[500px] rounded-full bg-purple-600/20 blur-[120px]" />
+          <div className="absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-blue-600/20 blur-[120px]" />
         </div>
+        <AppHeader
+          backTo={state ? "/dashboard" : "/"}
+          badgeLabel="Análise da partida"
+          maxWidth="max-w-6xl"
+          backState={state}
+        />
+        <main className="relative z-10 mx-auto max-w-6xl px-6 py-8">
+          <SkeletonMatchDetail />
+        </main>
       </div>
     );
   }
 
   if (error || !match) {
     return (
-      <div className={`min-h-screen w-full ${bgMain} ${textPrimary} flex items-center justify-center`}>
+      <div className="min-h-screen w-full bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex items-center justify-center">
         <div className="text-center">
-          <p className={textMuted}>{error ?? "Partida não encontrada."}</p>
+          <p className="text-zinc-500">{error ?? "Partida não encontrada."}</p>
           <Button className="mt-4" onClick={() => navigate(state ? "/dashboard" : "/")}>
             Voltar
           </Button>
@@ -213,47 +228,22 @@ export default function MatchDetailPageConsistent() {
   const durationMin = match.gameDuration != null ? Math.floor(match.gameDuration / 60) : null;
 
   return (
-    <div className={`min-h-screen w-full transition-colors duration-500 ${bgMain} ${textPrimary}`}>
+    <div className="min-h-screen w-full transition-colors duration-500 bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[500px] w-[500px] rounded-full bg-purple-600/20 blur-[120px]" />
         <div className="absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-blue-600/20 blur-[120px]" />
       </div>
 
-      <header
-        className={`relative z-10 border-b backdrop-blur-xl ${isDark ? "border-white/5" : "border-zinc-200/80"}`}
-      >
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              className={`${textSecondary} hover:text-white hover:bg-white/10`}
-              onClick={() => navigate("/dashboard", { state })}
-            >
-              <ArrowLeft size={18} />
-            </Button>
-            <div className="flex items-center gap-2 font-semibold tracking-tight">
-              <Zap className="h-5 w-5 text-purple-400" />
-              <span className="text-lg">EloSense</span>
-              <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20">
-                Análise da partida
-              </Badge>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            {isAuthenticated && authUser && (
-              <UserDropdown user={authUser} isDark={isDark} />
-            )}
-            <Sun className={`h-4 w-4 ${isDark ? "opacity-60 text-zinc-400" : "text-zinc-600"}`} />
-            <Switch checked={dark} onCheckedChange={setDark} />
-            <Moon className={`h-4 w-4 ${isDark ? "opacity-60 text-zinc-400" : "text-zinc-600"}`} />
-          </div>
-        </div>
-      </header>
+      <AppHeader
+        backTo="/dashboard"
+        badgeLabel="Análise da partida"
+        maxWidth="max-w-6xl"
+        backState={state}
+      />
 
       <main className="relative z-10 mx-auto max-w-6xl px-6 py-8 space-y-8">
         <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}>
-          <Card className={glassCard}>
+          <Card className="border-zinc-200/80 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
             <CardContent className="p-6 flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <img
@@ -266,21 +256,21 @@ export default function MatchDetailPageConsistent() {
                   }}
                 />
                 <div>
-                  <div className={`text-lg ${textPrimary} font-semibold`}>{match.champion}</div>
-                  <div className={`text-sm ${textSecondary}`}>
+                  <div className="text-lg text-zinc-900 dark:text-zinc-100 font-semibold">{match.champion}</div>
+                  <div className="text-sm text-zinc-600 dark:text-zinc-400">
                     {match.kda} • {match.result ? "Vitória" : "Derrota"}
                     {durationMin != null ? ` • ${durationMin} min` : ""}
                   </div>
-                  <div className={`text-xs ${textMuted} mt-0.5`}>
+                  <div className="text-xs text-zinc-500 mt-0.5">
                     {getQueueType(match.queueId)}
                     {getLaneLabel(match.teamPosition) && ` • ${getLaneLabel(match.teamPosition)}`}
                     {formatMatchDate(match.gameEndTimestamp) && ` • ${formatMatchDate(match.gameEndTimestamp)}`}
-                    {match.tier && match.rank && ` • ${match.tier} ${match.rank}`}
+                    {match.tier && ` • ${getTierLabelPt(match.tier)}${match.rank ? ` ${match.rank}` : ""}`}
                   </div>
                 </div>
               </div>
               <div className="text-right">
-                <div className={`text-sm ${textSecondary}`}>Pontuação</div>
+                <div className="text-sm text-zinc-600 dark:text-zinc-400">Pontuação</div>
                 <div
                   className={`text-3xl font-bold ${scoreBadge(match.score)} border rounded-lg px-2 inline-block`}
                 >
@@ -296,62 +286,74 @@ export default function MatchDetailPageConsistent() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.03 }}
         >
-          <Card className={glassCard}>
+          <Card className="border-zinc-200/80 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Target size={18} className="text-purple-400" />
-                <span className={`text-lg ${textPrimary} font-semibold`}>Comparar com outro elo</span>
+                <span className="text-lg text-zinc-900 dark:text-zinc-100 font-semibold">Comparar com outro elo</span>
                 {loadingComparison && (
-                  <Loader2 className="h-4 w-4 animate-spin text-purple-400" aria-hidden />
+                  <span className="flex items-center gap-1.5 text-sm text-zinc-500 font-normal">
+                    <Loader2 className="h-4 w-4 animate-spin text-purple-400" aria-hidden />
+                    Carregando comparação…
+                  </span>
                 )}
               </CardTitle>
-              <p className={`text-sm ${textSecondary}`}>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
                 Altere o elo e a divisão para ver benchmarks e análise em relação a esse rank.
               </p>
             </CardHeader>
             <CardContent className="flex flex-wrap items-center gap-4">
               <div className="flex flex-wrap items-center gap-2">
-                <label htmlFor="compare-tier" className={`text-sm ${textSecondary}`}>
+                <label htmlFor="compare-tier" className="text-sm text-zinc-600 dark:text-zinc-400">
                   Tier
                 </label>
                 <Select
                   value={comparisonTier}
-                  onValueChange={setComparisonTier}
+                  onValueChange={(v) => {
+                    setComparisonTier(v);
+                    if (!tierHasRank(v)) {
+                      setComparisonRank("");
+                    } else if (!comparisonRank || !RANKS.includes(comparisonRank as (typeof RANKS)[number])) {
+                      setComparisonRank(DEFAULT_COMPARE_RANK);
+                    }
+                  }}
                   disabled={loadingComparison}
                 >
-                  <SelectTrigger id="compare-tier" className={`w-[140px] ${textPrimary}`}>
+                  <SelectTrigger id="compare-tier" className="w-[140px] text-zinc-900 dark:text-zinc-100">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className={isDark ? "bg-zinc-900 border-white/10 text-zinc-100" : "bg-white border-zinc-200 text-zinc-900"}>
+                  <SelectContent className="bg-white border-zinc-200 text-zinc-900 dark:bg-zinc-900 dark:border-white/10 dark:text-zinc-100">
                     {TIERS.map((t) => (
                       <SelectItem key={t} value={t}>
-                        {t.charAt(0) + t.slice(1).toLowerCase()}
+                        {getTierLabelPt(t)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <label htmlFor="compare-rank" className={`text-sm ${textSecondary}`}>
-                  Divisão
-                </label>
-                <Select
-                  value={comparisonRank}
-                  onValueChange={setComparisonRank}
-                  disabled={loadingComparison}
-                >
-                  <SelectTrigger id="compare-rank" className={`w-[80px] ${textPrimary}`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className={isDark ? "bg-zinc-900 border-white/10 text-zinc-100" : "bg-white border-zinc-200 text-zinc-900"}>
-                    {RANKS.map((r) => (
-                      <SelectItem key={r} value={r}>
-                        {r}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {tierHasRank(comparisonTier) && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <label htmlFor="compare-rank" className="text-sm text-zinc-600 dark:text-zinc-400">
+                    Divisão
+                  </label>
+                  <Select
+                    value={comparisonRank}
+                    onValueChange={setComparisonRank}
+                    disabled={loadingComparison}
+                  >
+                    <SelectTrigger id="compare-rank" className="w-[80px] text-zinc-900 dark:text-zinc-100">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-zinc-200 text-zinc-900 dark:bg-zinc-900 dark:border-white/10 dark:text-zinc-100">
+                      {RANKS.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {r}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </CardContent>
           </Card>
         </motion.div>
@@ -363,10 +365,10 @@ export default function MatchDetailPageConsistent() {
         >
           <div className="grid md:grid-cols-4 gap-4">
             {metricsConfig(match).map((metric) => (
-              <Card key={metric.label} className={glassCard}>
+              <Card key={metric.label} className="border-zinc-200/80 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <metric.icon size={16} className={textSecondary} />
+                    <metric.icon size={16} className="text-zinc-600 dark:text-zinc-400" />
                     {metric.status === "good" && (
                       <CheckCircle size={16} className="text-emerald-400" />
                     )}
@@ -374,8 +376,8 @@ export default function MatchDetailPageConsistent() {
                       <AlertTriangle size={16} className="text-amber-400" />
                     )}
                   </div>
-                  <div className={`text-lg ${textPrimary} font-semibold`}>{metric.value}</div>
-                  <div className={`text-xs ${textSecondary}`}>{metric.label}</div>
+                  <div className="text-lg text-zinc-900 dark:text-zinc-100 font-semibold">{metric.value}</div>
+                  <div className="text-xs text-zinc-600 dark:text-zinc-400">{metric.label}</div>
                 </CardContent>
               </Card>
             ))}
@@ -387,18 +389,18 @@ export default function MatchDetailPageConsistent() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <Card className={glassCard}>
+          <Card className="border-zinc-200/80 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp size={18} className="text-purple-400" />
-                <span className={`text-lg ${textPrimary} font-semibold`}>Métricas detalhadas</span>
+                <span className="text-lg text-zinc-900 dark:text-zinc-100 font-semibold">Métricas detalhadas</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-                <div className="rounded-xl border text-card-foreground shadow border-white/10 bg-white/5 backdrop-blur-xl p-4">
+                <div className="rounded-xl border text-card-foreground shadow border-zinc-200/80 bg-zinc-50/50 dark:border-white/10 dark:bg-white/5 backdrop-blur-xl p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <span className={`text-sm ${textSecondary}`}>Dano/min</span>
+                    <span className="text-sm text-zinc-600 dark:text-zinc-400">Dano/min</span>
                     {hasBenchmarks && match.idealBenchmarks?.damagePerMin?.p50 != null && (
                       match.damagePerMin >= match.idealBenchmarks.damagePerMin.p50 ? (
                         <CheckCircle size={16} className="text-emerald-400" />
@@ -407,11 +409,11 @@ export default function MatchDetailPageConsistent() {
                       )
                     )}
                   </div>
-                  <p className={`text-lg ${textPrimary} font-semibold`}>{match.damagePerMin.toFixed(0)}</p>
+                  <p className="text-lg text-zinc-900 dark:text-zinc-100 font-semibold">{match.damagePerMin.toFixed(0)}</p>
                 </div>
-                <div className="rounded-xl border text-card-foreground shadow border-white/10 bg-white/5 backdrop-blur-xl p-4">
+                <div className="rounded-xl border text-card-foreground shadow border-zinc-200/80 bg-zinc-50/50 dark:border-white/10 dark:bg-white/5 backdrop-blur-xl p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <span className={`text-sm ${textSecondary}`}>Mortes</span>
+                    <span className="text-sm text-zinc-600 dark:text-zinc-400">Mortes</span>
                     {hasBenchmarks && match.idealBenchmarks?.deaths?.p50 != null && (
                       match.deaths <= match.idealBenchmarks.deaths.p50 ? (
                         <CheckCircle size={16} className="text-emerald-400" />
@@ -420,11 +422,11 @@ export default function MatchDetailPageConsistent() {
                       )
                     )}
                   </div>
-                  <p className={`text-lg ${textPrimary} font-semibold`}>{match.deaths}</p>
+                  <p className="text-lg text-zinc-900 dark:text-zinc-100 font-semibold">{match.deaths}</p>
                 </div>
-                <div className="rounded-xl border text-card-foreground shadow border-white/10 bg-white/5 backdrop-blur-xl p-4">
+                <div className="rounded-xl border text-card-foreground shadow border-zinc-200/80 bg-zinc-50/50 dark:border-white/10 dark:bg-white/5 backdrop-blur-xl p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <span className={`text-sm ${textSecondary}`}>Mortes no início</span>
+                    <span className="text-sm text-zinc-600 dark:text-zinc-400">Mortes no início</span>
                     {hasBenchmarks && match.idealBenchmarks?.deaths?.p50 != null && (
                       match.earlyDeaths <= match.idealBenchmarks.deaths.p50 ? (
                         <CheckCircle size={16} className="text-emerald-400" />
@@ -433,11 +435,11 @@ export default function MatchDetailPageConsistent() {
                       )
                     )}
                   </div>
-                  <p className={`text-lg ${textPrimary} font-semibold`}>{match.earlyDeaths}</p>
+                  <p className="text-lg text-zinc-900 dark:text-zinc-100 font-semibold">{match.earlyDeaths}</p>
                 </div>
-                <div className="rounded-xl border text-card-foreground shadow border-white/10 bg-white/5 backdrop-blur-xl p-4">
+                <div className="rounded-xl border text-card-foreground shadow border-zinc-200/80 bg-zinc-50/50 dark:border-white/10 dark:bg-white/5 backdrop-blur-xl p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <span className={`text-sm ${textSecondary}`}>Mortes solo</span>
+                    <span className="text-sm text-zinc-600 dark:text-zinc-400">Mortes solo</span>
                     {hasBenchmarks && match.idealBenchmarks?.deaths?.p50 != null && (
                       match.soloDeaths <= match.idealBenchmarks.deaths.p50 ? (
                         <CheckCircle size={16} className="text-emerald-400" />
@@ -446,7 +448,7 @@ export default function MatchDetailPageConsistent() {
                       )
                     )}
                   </div>
-                  <p className={`text-lg ${textPrimary} font-semibold`}>{match.soloDeaths}</p>
+                  <p className="text-lg text-zinc-900 dark:text-zinc-100 font-semibold">{match.soloDeaths}</p>
                 </div>
               </div>
             </CardContent>
@@ -460,18 +462,18 @@ export default function MatchDetailPageConsistent() {
             transition={{ delay: 0.1 }}
           >
             <TooltipProvider delayDuration={200}>
-              <Card className={glassCard}>
+              <Card className="border-zinc-200/80 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Target size={18} className="text-purple-400" />
-                    <span className={`text-lg ${textPrimary} font-semibold`}>Benchmarks de referência (elo)</span>
+                    <span className="text-lg text-zinc-900 dark:text-zinc-100 font-semibold">Benchmarks de referência (elo)</span>
                   </CardTitle>
-                  <p className={`text-sm ${textSecondary} flex flex-wrap items-center gap-1`}>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400 flex flex-wrap items-center gap-1">
                     <span>Mediana (P50) e P75 para seu elo e posição</span>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button type="button" className="inline-flex p-0.5 rounded focus:outline-none focus:ring-2 focus:ring-purple-500/50" aria-label="O que são P50 e P75?">
-                          <HelpCircle size={14} className={textMuted} />
+                          <HelpCircle size={14} className="text-zinc-500" />
                         </button>
                       </TooltipTrigger>
                       <TooltipContent side="top" className="max-w-[280px]">
@@ -484,7 +486,7 @@ export default function MatchDetailPageConsistent() {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button type="button" className="inline-flex p-0.5 rounded focus:outline-none focus:ring-2 focus:ring-purple-500/50" aria-label="O que significa n?">
-                            <HelpCircle size={14} className={textMuted} />
+                            <HelpCircle size={14} className="text-zinc-500" />
                           </button>
                         </TooltipTrigger>
                         <TooltipContent side="top" className="max-w-[280px]">
@@ -505,13 +507,13 @@ export default function MatchDetailPageConsistent() {
                       { key: "killParticipation", label: "Part. abates %", v: match.idealBenchmarks.killParticipation },
                       { key: "deaths", label: "Mortes", v: match.idealBenchmarks.deaths },
                     ].map(({ label, v }) => (
-                      <div key={label} className={`p-3 rounded-lg border ${isDark ? "border-white/10 bg-white/5" : "border-zinc-200/80 bg-zinc-50/50"}`}>
-                        <div className={`text-xs ${textSecondary} mb-1 flex items-center gap-1`}>
+                      <div key={label} className="p-3 rounded-lg border border-zinc-200/80 bg-zinc-50/50 dark:border-white/10 dark:bg-white/5">
+                        <div className="text-xs text-zinc-600 dark:text-zinc-400 mb-1 flex items-center gap-1">
                           <span>{label}</span>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <button type="button" className="inline-flex p-0 rounded focus:outline-none focus:ring-2 focus:ring-purple-500/50 shrink-0" aria-label={`O que é ${label}?`}>
-                                <HelpCircle size={12} className={textMuted} />
+                                <HelpCircle size={12} className="text-zinc-500" />
                               </button>
                             </TooltipTrigger>
                             <TooltipContent side="top" className="max-w-[240px]">
@@ -519,10 +521,10 @@ export default function MatchDetailPageConsistent() {
                             </TooltipContent>
                           </Tooltip>
                         </div>
-                        <div className={`${textPrimary} font-medium`}>
+                        <div className="text-zinc-900 dark:text-zinc-100 font-medium">
                           P50: {v?.p50 != null ? (label === "Part. abates %" ? `${v.p50.toFixed(0)}%` : v.p50.toFixed(1)) : "—"}
                         </div>
-                        <div className={`text-xs ${textSecondary}`}>
+                        <div className="text-xs text-zinc-600 dark:text-zinc-400">
                           P75: {v?.p75 != null ? (label === "Part. abates %" ? `${v.p75.toFixed(0)}%` : v.p75.toFixed(1)) : "—"}
                         </div>
                       </div>
@@ -539,14 +541,14 @@ export default function MatchDetailPageConsistent() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: match.idealBenchmarks != null ? 0.15 : 0.1 }}
         >
-          <Card className={glassCard}>
+          <Card className="border-zinc-200/80 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp size={18} className="text-purple-400" />
-                <span className={`text-lg ${textPrimary} font-semibold`}>Análise completa</span>
+                <span className="text-lg text-zinc-900 dark:text-zinc-100 font-semibold">Análise completa</span>
               </CardTitle>
               {match.analysis?.summary && (
-                <p className={`text-sm ${textSecondary}`}>{match.analysis.summary}</p>
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">{match.analysis.summary}</p>
               )}
             </CardHeader>
             <CardContent className="space-y-3">
@@ -555,14 +557,14 @@ export default function MatchDetailPageConsistent() {
                   {match.analysis.insights.map((insight, i) => {
                     const isGood = insight.interpretation.startsWith("above_") && insight.metric !== "deaths" || (insight.metric === "deaths" && insight.interpretation.startsWith("below_"));
                     const isWarn = insight.interpretation === "below_p50" && insight.metric !== "deaths" || (insight.metric === "deaths" && insight.interpretation === "above_p75");
-                    const bg = isGood ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300 dark:text-emerald-400" : isWarn ? "bg-amber-500/10 border-amber-500/20 text-amber-300 dark:text-amber-400" : isDark ? "bg-white/5 border-white/10" : "bg-zinc-50/50 border-zinc-200/80";
+                    const bg = isGood ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300 dark:text-emerald-400" : isWarn ? "bg-amber-500/10 border-amber-500/20 text-amber-300 dark:text-amber-400" : "bg-zinc-50/50 border-zinc-200/80 dark:bg-white/5 dark:border-white/10";
                     return (
                       <li
                         key={i}
                         className={`flex items-center justify-between gap-2 p-3 rounded-lg border ${bg}`}
                       >
                         <span>{insight.label}: {insight.value != null ? (insight.metric === "killParticipation" ? `${insight.value.toFixed(0)}%` : insight.value.toFixed(1)) : "—"}</span>
-                        <span className={`text-xs ${textSecondary}`}>
+                        <span className="text-xs text-zinc-600 dark:text-zinc-400">
                           P50: {insight.p50 != null ? insight.p50.toFixed(1) : "—"} · P75: {insight.p75 != null ? insight.p75.toFixed(1) : "—"}
                         </span>
                       </li>
@@ -571,7 +573,7 @@ export default function MatchDetailPageConsistent() {
                 </ul>
               ) : (
                 <>
-                  <p className={`text-sm ${textSecondary}`}>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
                     Defina região e elo (Tier/Rank) no Dashboard para comparar com benchmarks.
                     {tips.length > 0 ? " Enquanto isso, dicas por regras fixas:" : ""}
                   </p>
@@ -595,11 +597,7 @@ export default function MatchDetailPageConsistent() {
         </motion.div>
       </main>
 
-      <footer
-        className={`relative z-10 border-t py-6 text-center text-sm ${textMuted} ${isDark ? "border-white/5" : "border-zinc-200/80"}`}
-      >
-        © 2026 EloSense. Todos os direitos reservados.
-      </footer>
+      <AppFooter />
     </div>
   );
 }

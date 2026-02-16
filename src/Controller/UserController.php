@@ -179,7 +179,8 @@ class UserController extends AbstractController
             $user->setBirthDate($birthDate);
         }
 
-        if (isset($data['avatarUrl'])) {
+        // Do not persist avatarUrl from client when user has S3 avatar (avatarKey); URL is generated on the fly
+        if (isset($data['avatarUrl']) && empty($user->getAvatarKey())) {
             $user->setAvatarUrl($data['avatarUrl']);
         }
 
@@ -194,14 +195,13 @@ class UserController extends AbstractController
             throw new Exception($errorMessage, 400);
         }
 
-        $avatarKey = $user->getAvatarKey();
-        if (isset($avatarKey)) {
-            $user->setAvatarUrl($this->s3Service->generateFileUrl($avatarKey));
-        }
-
         $this->userService->add($user);
 
         $normalizedData = $this->normalizer->normalize($user, 'json', ['groups' => ['user_all']]);
+        $avatarKey = $user->getAvatarKey();
+        if (!empty($avatarKey)) {
+            $normalizedData['avatarUrl'] = $this->s3Service->generateFileUrl($avatarKey);
+        }
         return new JsonResponse(['data' => $normalizedData]);
     }
 

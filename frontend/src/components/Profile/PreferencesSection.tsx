@@ -34,14 +34,14 @@ export default function PreferencesSection() {
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="border-zinc-200/80 bg-white/80 backdrop-blur-xl text-zinc-900 dark:border-white/10 dark:bg-white/5 dark:text-zinc-100">
         <CardContent className="p-6 space-y-4">
           <div className="flex items-center gap-3">
-            <Bell className="text-muted-foreground" />
+            <Bell className="text-zinc-600 dark:text-zinc-400" />
             <h3 className="text-lg font-semibold">Notificações</h3>
           </div>
 
-          <Separator />
+          <Separator className="bg-zinc-200 dark:bg-white/10" />
 
           <div className="space-y-3">
             <PreferenceItem
@@ -83,7 +83,7 @@ function PreferenceItem({
     <div className="flex items-center justify-between gap-4">
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium">{label}</p>
-        <p className="text-xs text-muted-foreground">{description}</p>
+        <p className="text-xs text-zinc-600 dark:text-zinc-400">{description}</p>
       </div>
 
       <Switch

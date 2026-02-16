@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import z from "zod";
@@ -89,6 +89,7 @@ export default function ChangePasswordModal({
     handleSubmit,
     watch,
     reset,
+    trigger,
     formState: { errors, isValid },
   } = useForm<PasswordFormData>({
     resolver: zodResolver(passwordSchema),
@@ -96,7 +97,14 @@ export default function ChangePasswordModal({
   });
 
   const newPassword = watch("newPassword", "");
+  const confirmPassword = watch("confirmPassword", "");
   const passwordStrength = newPassword ? getPasswordStrength(newPassword) : null;
+
+  useEffect(() => {
+    if (confirmPassword) {
+      trigger("confirmPassword");
+    }
+  }, [newPassword, confirmPassword, trigger]);
 
   const onSubmit = async (data: PasswordFormData) => {
     if (!user) return;
@@ -124,10 +132,10 @@ export default function ChangePasswordModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-md w-[90vw] max-w-[400px] sm:max-w-[500px] max-h-[85vh] overflow-y-auto">
+      <DialogContent className="rounded-xl w-[90vw] max-w-[400px] sm:max-w-[500px] max-h-[85vh] overflow-y-auto border-zinc-200/80 bg-white dark:border-purple-500/20 dark:bg-zinc-900/95 dark:backdrop-blur-xl text-zinc-900 dark:text-zinc-100 shadow-xl">
         <DialogHeader>
-          <DialogTitle>Alterar senha</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-zinc-900 dark:text-zinc-100">Alterar senha</DialogTitle>
+          <DialogDescription className="text-zinc-600 dark:text-zinc-400">
             Digite sua senha atual e escolha uma nova senha segura.
           </DialogDescription>
         </DialogHeader>
@@ -135,13 +143,13 @@ export default function ChangePasswordModal({
         <form onSubmit={handleSubmit(onSubmit)}>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="currentPassword">Senha atual</Label>
+              <Label htmlFor="currentPassword" className="text-zinc-700 dark:text-zinc-300">Senha atual</Label>
               <div className="relative">
                 <Input
                   id="currentPassword"
                   type={showCurrentPassword ? "text" : "password"}
                   {...register("currentPassword")}
-                  className="pr-10"
+                  className="pr-10 bg-zinc-50 border-zinc-200 text-zinc-900 focus-visible:ring-purple-500 dark:bg-white/5 dark:border-white/10 dark:text-zinc-100"
                 />
                 <Button
                   type="button"
@@ -158,20 +166,20 @@ export default function ChangePasswordModal({
                 </Button>
               </div>
               {errors.currentPassword && (
-                <p className="text-xs text-destructive">
+                <p className="text-xs text-red-400">
                   {errors.currentPassword.message}
                 </p>
               )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="newPassword">Nova senha</Label>
+              <Label htmlFor="newPassword" className="text-zinc-700 dark:text-zinc-300">Nova senha</Label>
               <div className="relative">
                 <Input
                   id="newPassword"
                   type={showNewPassword ? "text" : "password"}
                   {...register("newPassword")}
-                  className="pr-10"
+                  className="pr-10 bg-zinc-50 border-zinc-200 text-zinc-900 focus-visible:ring-purple-500 dark:bg-white/5 dark:border-white/10 dark:text-zinc-100"
                 />
                 <Button
                   type="button"
@@ -188,7 +196,7 @@ export default function ChangePasswordModal({
                 </Button>
               </div>
               {errors.newPassword && (
-                <p className="text-xs text-destructive">
+                <p className="text-xs text-red-400">
                   {errors.newPassword.message}
                 </p>
               )}
@@ -198,49 +206,49 @@ export default function ChangePasswordModal({
                     <div
                       className={`flex-1 rounded ${
                         passwordStrength.strength === "weak"
-                          ? "bg-destructive"
+                          ? "bg-red-500"
                           : passwordStrength.strength === "medium"
-                          ? "bg-yellow-500"
-                          : "bg-green-500"
+                            ? "bg-amber-500"
+                            : "bg-emerald-500"
                       }`}
                     />
                     <div
                       className={`flex-1 rounded ${
                         passwordStrength.strength === "strong"
-                          ? "bg-green-500"
+                          ? "bg-emerald-500"
                           : passwordStrength.strength === "medium"
-                          ? "bg-yellow-500"
-                          : "bg-muted"
+                            ? "bg-amber-500"
+                            : "bg-zinc-300 dark:bg-zinc-700"
                       }`}
                     />
                     <div
                       className={`flex-1 rounded ${
                         passwordStrength.strength === "strong"
-                          ? "bg-green-500"
-                          : "bg-muted"
+                          ? "bg-emerald-500"
+                          : "bg-zinc-300 dark:bg-zinc-700"
                       }`}
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">
                     Força:{" "}
                     <span
                       className={
                         passwordStrength.strength === "weak"
-                          ? "text-destructive"
+                          ? "text-red-500 dark:text-red-400"
                           : passwordStrength.strength === "medium"
-                          ? "text-yellow-600"
-                          : "text-green-600"
+                            ? "text-amber-500 dark:text-amber-400"
+                            : "text-emerald-500 dark:text-emerald-400"
                       }
                     >
                       {passwordStrength.strength === "weak"
                         ? "Fraca"
                         : passwordStrength.strength === "medium"
-                        ? "Média"
-                        : "Forte"}
+                          ? "Média"
+                          : "Forte"}
                     </span>
                   </p>
                   {passwordStrength.feedback.length > 0 && (
-                    <ul className="text-xs text-muted-foreground list-disc list-inside">
+                    <ul className="text-xs text-zinc-600 dark:text-zinc-400 list-disc list-inside">
                       {passwordStrength.feedback.map((item, idx) => (
                         <li key={idx}>{item}</li>
                       ))}
@@ -251,13 +259,13 @@ export default function ChangePasswordModal({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirmar nova senha</Label>
+              <Label htmlFor="confirmPassword" className="text-zinc-700 dark:text-zinc-300">Confirmar nova senha</Label>
               <div className="relative">
                 <Input
                   id="confirmPassword"
                   type={showConfirmPassword ? "text" : "password"}
                   {...register("confirmPassword")}
-                  className="pr-10"
+                  className="pr-10 bg-zinc-50 border-zinc-200 text-zinc-900 focus-visible:ring-purple-500 dark:bg-white/5 dark:border-white/10 dark:text-zinc-100"
                 />
                 <Button
                   type="button"
@@ -274,7 +282,7 @@ export default function ChangePasswordModal({
                 </Button>
               </div>
               {errors.confirmPassword && (
-                <p className="text-xs text-destructive">
+                <p className="text-xs text-red-400">
                   {errors.confirmPassword.message}
                 </p>
               )}
@@ -287,6 +295,7 @@ export default function ChangePasswordModal({
               type="submit"
               loading={isLoading}
               disabled={!isValid || isLoading}
+              styling="bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:opacity-90"
             />
           </DialogFooter>
         </form>

@@ -11,10 +11,11 @@ type PrivateRouteProps = {
 };
 
 const PrivateRoute = ({ children, allowedRoles }: PrivateRouteProps) => {
-    const { isAuthenticated, user } = useAuth();
+    const { isAuthenticated, user, isValidating } = useAuth();
     const location = useLocation();
 
-    if (!isAuthenticated) {
+    /** Não redireciona durante validação; renderiza children com skeletons nos componentes filhos */
+    if (!isValidating && !isAuthenticated) {
         return <Navigate to="/login" state={{ from: location }} replace />;
     }
 

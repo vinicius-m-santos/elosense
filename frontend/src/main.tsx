@@ -7,12 +7,10 @@ import App from "./App";
 import "./index.css";
 import "./i18n";
 import { AuthProvider } from "./providers/AuthProvider";
+import { ThemeProvider } from "./providers/ThemeProvider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 // import FeedbackButton from "./components/Feedback/FeedbackButton";
-import { AllCommunityModule, ModuleRegistry } from "ag-grid-community";
 // import * as Sentry from "@sentry/react";
-
-ModuleRegistry.registerModules([AllCommunityModule]);
 
 const queryClient = new QueryClient();
 
@@ -26,9 +24,17 @@ const root = (
             <QueryClientProvider client={queryClient}>
                 <GoogleOAuthProvider clientId={googleClientId} locale="pt-BR">
                     <AuthProvider>
-                        <Toaster position="top-center" />
+                    <ThemeProvider>
+                        <Toaster
+                            position="top-center"
+                            toastOptions={{
+                              className:
+                                "!bg-white !text-zinc-900 dark:!bg-zinc-800 dark:!text-zinc-100 dark:!border-white/10",
+                            }}
+                        />
                         <App />
                         {/* <FeedbackButton /> */}
+                    </ThemeProvider>
                     </AuthProvider>
                 </GoogleOAuthProvider>
             </QueryClientProvider>

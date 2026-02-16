@@ -3,18 +3,14 @@
 namespace App\EventListener;
 
 use App\Entity\User;
-use App\Exception\EmailNotVerifiedException;
+use App\Service\S3Service;
 use Lexik\Bundle\JWTAuthenticationBundle\Event\AuthenticationSuccessEvent;
-use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 
 class JWTSuccessHandler
 {
-    private NormalizerInterface $normalizer;
-
-    public function __construct(NormalizerInterface $normalizer)
-    {
-        $this->normalizer = $normalizer;
+    public function __construct(
+        private readonly S3Service $s3Service
+    ) {
     }
     public function onAuthenticationSuccess(AuthenticationSuccessEvent $event)
     {
@@ -61,11 +57,20 @@ class JWTSuccessHandler
             'active' => $user->isActive(),
             'deletedAt' => $user->getDeletedAt() ? $user->getDeletedAt()->format('Y-m-d H:i:s') : null,
             'avatarKey' => $user->getAvatarKey(),
-            'avatarUrl' => $user->getAvatarUrl(),
+            'avatarUrl' => $this->resolveAvatarUrl($user),
         ];
 
         $data['success'] = true;
 
         $event->setData($data);
+    }
+
+    private function resolveAvatarUrl(User $user): ?string
+    {
+        $key = $user->getAvatarKey();
+        if (!empty($key)) {
+            return $this->s3Service->generateFileUrl($key);
+        }
+        return $user->getAvatarUrl();
     }
 }

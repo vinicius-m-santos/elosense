@@ -15,7 +15,7 @@ export type LeagueEntry = {
   losses: number;
 };
 
-export type PlayerRankResponse = { entries: LeagueEntry[] };
+export type PlayerRankResponse = { entries: LeagueEntry[]; profileIconId?: number | null };
 
 export type MetricBenchmark = { avg: number | null; p50: number | null; p75: number | null };
 

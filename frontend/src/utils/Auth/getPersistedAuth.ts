@@ -8,6 +8,10 @@ export type PersistedAuth = {
   user?: AuthUser | null;
 } | null;
 
+/**
+ * Reads persisted auth from the same storage key used by authStore (Zustand persist).
+ * Uses direct localStorage read for synchronous access during initial render.
+ */
 export function getPersistedAuth(): PersistedAuth {
   try {
     const raw = localStorage.getItem(AUTH_STORAGE_KEY);
