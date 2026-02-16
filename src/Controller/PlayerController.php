@@ -9,6 +9,7 @@ use App\Repository\PlayerRepository;
 use App\Service\BenchmarkService;
 use App\Service\MatchAnalysisService;
 use App\Service\MatchScoreCalculator;
+use App\Service\PlayerService;
 use App\Service\RiotApiService;
 use App\Service\SampleMatchStorageService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -19,10 +20,17 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Routing\Annotation\Route;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 
 #[Route('/api')]
 class PlayerController extends AbstractController
 {
+    /** queueId (match) → queueType (League-v4). Used to resolve tier/rank per match by queue. */
+    private const QUEUE_ID_TO_QUEUE_TYPE = [
+        420 => 'RANKED_SOLO_5x5',
+        440 => 'RANKED_FLEX_SR',
+    ];
+
     public function __construct(
         private readonly RiotApiService $riotApiService,
         private readonly PlayerRepository $playerRepository,
@@ -32,7 +40,9 @@ class PlayerController extends AbstractController
         private readonly MatchAnalysisService $matchAnalysisService,
         private readonly MatchScoreCalculator $matchScoreCalculator,
         private readonly EntityManagerInterface $em,
-        private readonly LoggerInterface $logger
+        private readonly LoggerInterface $logger,
+        private readonly PlayerService $playerService,
+        private readonly NormalizerInterface $normalizer
     ) {}
 
     #[Route('/player', name: 'api_player', methods: ['GET'])]
@@ -40,27 +50,15 @@ class PlayerController extends AbstractController
     {
         $gameName = $request->query->get('gameName', '');
         $tagLine = $request->query->get('tagLine', '');
-        if ($gameName === '' || $tagLine === '') {
+        $region = $request->query->get('region', '');
+
+        if ($gameName === '' || $tagLine === '' || $region === '') {
             throw new UnprocessableEntityHttpException('gameName and tagLine are required');
         }
 
-        try {
-            $puuid = $this->riotApiService->getPuuidByRiotId($gameName, $tagLine);
-        } catch (\Throwable $e) {
-            throw new UnprocessableEntityHttpException('Player not found: ' . $e->getMessage());
-        }
+        $player = $this->playerService->getPlayerByRiotId($gameName, $tagLine, $region);
 
-        $player = $this->playerRepository->findByPuuid($puuid);
-        if (!$player) {
-            $player = new Player();
-            $player->setPuuid($puuid);
-            $player->setName($gameName);
-            $player->setTag($tagLine);
-            $this->em->persist($player);
-            $this->em->flush();
-        }
-
-        return new JsonResponse(['puuid' => $puuid]);
+        return new JsonResponse($this->normalizer->normalize($player, 'json', ['groups' => ['player_all']]));
     }
 
     /**
@@ -148,14 +146,12 @@ class PlayerController extends AbstractController
         }
 
         $region = $request->query->get('region', '');
-        $tier = $request->query->get('tier', '');
-        $rank = $request->query->get('rank', '');
         $platform = $region !== '' ? $region : null;
 
         $cached = $this->playerMatchRepository->findLastByPuuid($puuid, 10);
         $allHaveTimestamp = \count($cached) > 0 && \count(array_filter($cached, fn(PlayerMatch $m) => $m->getGameEndTimestamp() !== null)) === \count($cached);
         if (\count($cached) >= 10 && $allHaveTimestamp) {
-            $list = array_map(fn(PlayerMatch $m) => $this->enrichMatchResponse($this->matchToArray($m), $region, $tier, $rank), $cached);
+            $list = array_map(fn(PlayerMatch $m) => $this->enrichMatchResponse($this->matchToArray($m), $region, $player), $cached);
             $list = $this->sortMatchesByTimestamp($list);
             return new JsonResponse($list);
         }
@@ -184,7 +180,8 @@ class PlayerController extends AbstractController
                         // keep existing without timestamp
                     }
                 }
-                $list[] = $this->enrichMatchResponse($this->matchToArray($existing), $region, $tier, $rank);
+                throw new \Exception('2');
+                $list[] = $this->enrichMatchResponse($this->matchToArray($existing), $region, $player);
                 continue;
             }
             try {
@@ -219,7 +216,8 @@ class PlayerController extends AbstractController
             $match->setTeamPosition($metrics['teamPosition'] ?? null);
             $match->setOpponentChampionId($metrics['opponentChampionId'] ?? null);
             $this->em->persist($match);
-            $list[] = $this->enrichMatchResponse($this->metricsToArray($metrics), $region, $tier, $rank);
+            throw new \Exception('3');
+            $list[] = $this->enrichMatchResponse($this->metricsToArray($metrics), $region, $player);
         }
         $this->em->flush();
 
@@ -235,14 +233,18 @@ class PlayerController extends AbstractController
             throw new UnprocessableEntityHttpException('puuid is required');
         }
 
+        $player = $this->playerRepository->findByPuuid($puuid);
+        if (!$player) {
+            throw new NotFoundHttpException('Player not found');
+        }
+
         $region = $request->query->get('region', '');
-        $tier = $request->query->get('tier', '');
-        $rank = $request->query->get('rank', '');
         $platform = $region !== '' ? $region : null;
 
         $existing = $this->playerMatchRepository->findByMatchIdAndPuuid($matchId, $puuid);
         if ($existing) {
-            return new JsonResponse($this->enrichMatchResponse($this->matchToArray($existing), $region, $tier, $rank));
+            throw new \Exception('4');
+            return new JsonResponse($this->enrichMatchResponse($this->matchToArray($existing), $region, $player));
         }
 
         try {
@@ -257,9 +259,9 @@ class PlayerController extends AbstractController
             $this->sampleMatchStorage->persistMatchPayload($matchPayload, strtoupper($region), $puuid, null, null);
         }
 
-        $enriched = $this->enrichMatchResponse($this->metricsToArray($metrics), $region, $tier, $rank);
+        throw new \Exception('5');
+        $enriched = $this->enrichMatchResponse($this->metricsToArray($metrics), $region, $player);
 
-        $player = $this->playerRepository->findByPuuid($puuid);
         if ($player) {
             $match = new PlayerMatch();
             $match->setMatchId($metrics['matchId']);
@@ -290,20 +292,38 @@ class PlayerController extends AbstractController
     }
 
     /**
-     * Add tier/rank (when provided), idealBenchmarks and analysis to match payload.
+     * Add tier/rank (per queue), idealBenchmarks and analysis to match payload.
+     * Resolves tier/rank from the player's queueRanks using the match's queueId.
      *
      * @param array<string, mixed> $payload base match data (from matchToArray or metricsToArray)
      * @return array<string, mixed>
      */
-    private function enrichMatchResponse(array $payload, string $region, string $tier, string $rank): array
+    private function enrichMatchResponse(array $payload, string $region, Player $player): array
     {
+        $queueId = $payload['queueId'] ?? null;
+        $queueType = $queueId !== null && isset(self::QUEUE_ID_TO_QUEUE_TYPE[$queueId])
+            ? self::QUEUE_ID_TO_QUEUE_TYPE[$queueId]
+            : null;
+
+        $tier = '';
+        $rank = '';
+        if ($queueType !== null && $region !== '') {
+            foreach ($player->getQueueRanks() as $qr) {
+                if (strcasecmp($qr->getRegion(), $region) === 0 && $qr->getQueueType() === $queueType) {
+                    $tier = $qr->getTier();
+                    $rank = $qr->getRank();
+                    break;
+                }
+            }
+        }
+
         if ($tier !== '') {
             $payload['tier'] = $tier;
         }
         if ($rank !== '') {
             $payload['rank'] = $rank;
         }
-        $queueId = $payload['queueId'] ?? null;
+
         $teamPosition = $payload['teamPosition'] ?? null;
         $tiersWithoutRank = ['MASTER', 'GRANDMASTER', 'CHALLENGER'];
         $tierAllowsEmptyRank = $tier !== '' && \in_array(strtoupper($tier), $tiersWithoutRank, true);

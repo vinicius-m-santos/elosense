@@ -4,15 +4,29 @@ const baseURL = import.meta.env.VITE_API_URL ?? "";
 
 export const lolApi = axios.create({ baseURL });
 
-export type PlayerResponse = { puuid: string };
+/** One queue rank from GET /player (queueRanks array). */
+export type PlayerQueueRankResponse = {
+  queueType: string;
+  tier: string;
+  rank: string;
+  region: string;
+};
+
+export type PlayerResponse = {
+  puuid: string;
+  name: string;
+  tag: string;
+  queueRanks: PlayerQueueRankResponse[];
+  profileIconId?: number | null;
+};
 
 export type LeagueEntry = {
   queueType: string;
   tier: string;
   rank: string;
-  leaguePoints: number;
-  wins: number;
-  losses: number;
+  leaguePoints?: number;
+  wins?: number;
+  losses?: number;
 };
 
 export type PlayerRankResponse = { entries: LeagueEntry[]; profileIconId?: number | null };
@@ -72,9 +86,9 @@ export type MatchSummary = {
 
 export type MatchesParams = { puuid: string; region?: string; tier?: string; rank?: string };
 
-export async function fetchPlayer(gameName: string, tagLine: string): Promise<PlayerResponse> {
+export async function fetchPlayer(gameName: string, tagLine: string, region: string): Promise<PlayerResponse> {
   const { data } = await lolApi.get<PlayerResponse>("/player", {
-    params: { gameName, tagLine },
+    params: { gameName, tagLine, region },
   });
   return data;
 }
@@ -89,7 +103,7 @@ export async function fetchPlayerRank(puuid: string, region: string): Promise<Pl
 
 export async function fetchMatches(params: MatchesParams): Promise<MatchSummary[]> {
   const { data } = await lolApi.get<MatchSummary[]>("/matches", {
-    params: { puuid: params.puuid, region: params.region ?? undefined, tier: params.tier ?? undefined, rank: params.rank ?? undefined },
+    params: { puuid: params.puuid, region: params.region ?? undefined },
   });
   return data;
 }

@@ -43,7 +43,8 @@ export default function HomePage() {
     setLimitReached(false);
     const g = gameName.trim();
     const t = tagLine.trim();
-    if (!g || !t) {
+    const r = region.trim();
+    if (!g || !t || !r) {
       setError("Preencha Game Name e Tag.");
       return;
     }
@@ -56,14 +57,14 @@ export default function HomePage() {
     setLoading(true);
     try {
       setLoadingStep("player");
-      const { puuid } = await fetchPlayer(g, t);
+      const player = await fetchPlayer(g, t, r);
       setLoadingStep("matches");
-      const matches = await fetchMatches({ puuid, region });
+      const matches = await fetchMatches({ puuid: player.puuid, region: r });
       if (!useAuthStore.getState().hasStoredToken()) {
         incrementFreeSearch();
       }
       navigate("/dashboard", {
-        state: { puuid, gameName: g, tagLine: t, region, matches },
+        state: { player, region: r, matches },
       });
     } catch (err: unknown) {
       const msg =

@@ -15,8 +15,7 @@ final class BenchmarkService
 
     public function __construct(
         private readonly EloBenchmarkRepository $benchmarkRepository
-    ) {
-    }
+    ) {}
 
     /**
      * Get the best available benchmark for the given context.

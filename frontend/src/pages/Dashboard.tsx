@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { fetchMatches, fetchPlayerRank, getMatchTips, getMatchIdealLabel, type MatchSummary, type LeagueEntry } from "@/api/lolApi";
+import { fetchMatches, fetchPlayer, getMatchTips, getMatchIdealLabel, type MatchSummary, type LeagueEntry, type PlayerResponse } from "@/api/lolApi";
 import { getQueueType, getRankQueueLabel, getLaneLabel } from "@/utils/getQueueType";
 import { formatMatchDate } from "@/utils/dateUtils";
 import { AppHeader } from "@/components/AppHeader";
@@ -32,15 +32,24 @@ export default function DashboardConsistent() {
   const location = useLocation();
   const navigate = useNavigate();
   const state = location.state as
+    | { player: PlayerResponse; region?: string; matches: MatchSummary[] }
     | { puuid: string; gameName: string; tagLine: string; region?: string; matches: MatchSummary[] }
     | undefined;
 
   const storedPlayer = usePlayerStore((s) => s.player);
   const setPlayerStore = usePlayerStore((s) => s.setPlayer);
-  const [puuid, setPuuid] = useState<string | null>(state?.puuid ?? storedPlayer?.puuid ?? null);
-  const [gameName, setGameName] = useState(state?.gameName ?? storedPlayer?.gameName ?? "");
-  const [tagLine, setTagLine] = useState(state?.tagLine ?? storedPlayer?.tagLine ?? "");
-  const [region, setRegion] = useState(state?.region ?? storedPlayer?.region ?? DEFAULT_REGION);
+  const [puuid, setPuuid] = useState<string | null>(
+    (state && "player" in state ? state.player.puuid : state?.puuid) ?? storedPlayer?.puuid ?? null
+  );
+  const [gameName, setGameName] = useState(
+    (state && "player" in state ? state.player.name : state?.gameName) ?? storedPlayer?.gameName ?? ""
+  );
+  const [tagLine, setTagLine] = useState(
+    (state && "player" in state ? state.player.tag : state?.tagLine) ?? storedPlayer?.tagLine ?? ""
+  );
+  const [region, setRegion] = useState(
+    (state && "player" in state ? (state.region ?? state.player.queueRanks?.[0]?.region) : state?.region) ?? storedPlayer?.region ?? DEFAULT_REGION
+  );
   const [rankEntries, setRankEntries] = useState<LeagueEntry[]>([]);
   const [profileIconId, setProfileIconId] = useState<number | null>(null);
   const [rankLoaded, setRankLoaded] = useState(false);
@@ -52,7 +61,29 @@ export default function DashboardConsistent() {
     [...list].sort((a, b) => (b.gameEndTimestamp ?? 0) - (a.gameEndTimestamp ?? 0));
 
   useEffect(() => {
-    if (state?.puuid) {
+    if (state && "player" in state) {
+      const p = state.player;
+      setPuuid(p.puuid);
+      setGameName(p.name);
+      setTagLine(p.tag);
+      setRegion(state.region ?? p.queueRanks?.[0]?.region ?? DEFAULT_REGION);
+      setMatches(sortMatchesByTime(state.matches ?? []));
+      setRankEntries(
+        (p.queueRanks ?? []).map((qr) => ({
+          queueType: qr.queueType,
+          tier: qr.tier,
+          rank: qr.rank,
+        }))
+      );
+      setProfileIconId(p.profileIconId ?? null);
+      setRankLoaded(true);
+      setPlayerStore({
+        puuid: p.puuid,
+        gameName: p.name,
+        tagLine: p.tag,
+        region: state.region ?? p.queueRanks?.[0]?.region ?? DEFAULT_REGION,
+      });
+    } else if (state?.puuid) {
       setPuuid(state.puuid);
       setGameName(state.gameName);
       setTagLine(state.tagLine);
@@ -76,40 +107,35 @@ export default function DashboardConsistent() {
   }, [state, setPlayerStore]);
 
   useEffect(() => {
-    if (!puuid || !region) return;
-    setRankLoaded(false);
-    setProfileIconId(null);
-    fetchPlayerRank(puuid, region)
-      .then((r) => {
-        setRankEntries(r.entries ?? []);
-        setProfileIconId(r.profileIconId ?? null);
+    const hasPlayerFromState = state && "player" in state;
+    if (hasPlayerFromState) return;
+    if (!puuid || rankLoaded) return;
+    const g = (gameName || storedPlayer?.gameName) ?? "";
+    const t = (tagLine || storedPlayer?.tagLine) ?? "";
+    if (!g || !t) return;
+    fetchPlayer(g, t, region || DEFAULT_REGION)
+      .then((p) => {
+        setRankEntries(
+          (p.queueRanks ?? []).map((qr) => ({ queueType: qr.queueType, tier: qr.tier, rank: qr.rank }))
+        );
+        setProfileIconId(p.profileIconId ?? null);
       })
       .catch(() => {
         setRankEntries([]);
         setProfileIconId(null);
       })
       .finally(() => setRankLoaded(true));
-  }, [puuid, region]);
-
-  const primaryEntry = rankEntries.find((e) => e.queueType === RANKED_SOLO) ?? rankEntries[0];
-  const primaryTier = primaryEntry?.tier ?? null;
-  const primaryRank = primaryEntry?.rank ?? null;
+  }, [state, puuid, gameName, tagLine, region, rankLoaded, storedPlayer?.gameName, storedPlayer?.tagLine]);
 
   useEffect(() => {
-    if (!puuid) return;
-    if (!rankLoaded) return;
+    if (!puuid || !region) return;
     const shouldRefetch = matches.length === 0;
     if (!shouldRefetch) return;
     setLoading(true);
-    fetchMatches({
-      puuid,
-      region: region || undefined,
-      tier: primaryTier ?? undefined,
-      rank: primaryRank ?? undefined,
-    })
+    fetchMatches({ puuid, region })
       .then((data) => setMatches(sortMatchesByTime(data)))
       .finally(() => setLoading(false));
-  }, [puuid, region, primaryTier, primaryRank, rankLoaded, matches.length]);
+  }, [puuid, region, matches.length]);
 
   const filteredMatches = (() => {
     const list = searchQuery.trim()
@@ -258,14 +284,16 @@ export default function DashboardConsistent() {
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-zinc-500 mt-0.5">
-                    {entry.wins}V {entry.losses}D
-                    {entry.wins + entry.losses > 0 && (
-                      <span className="ml-1">
-                        ({(100 * entry.wins / (entry.wins + entry.losses)).toFixed(0)}%)
-                      </span>
-                    )}
-                  </div>
+                  {(entry.wins != null || entry.losses != null) && (
+                    <div className="text-xs text-zinc-500 mt-0.5">
+                      {(entry.wins ?? 0)}V {(entry.losses ?? 0)}D
+                      {(entry.wins ?? 0) + (entry.losses ?? 0) > 0 && (
+                        <span className="ml-1">
+                          ({(100 * (entry.wins ?? 0) / ((entry.wins ?? 0) + (entry.losses ?? 0))).toFixed(0)}%)
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -340,7 +368,7 @@ export default function DashboardConsistent() {
                     className="flex flex-wrap md:flex-nowrap items-center justify-between gap-3 p-4 rounded-xl border border-zinc-200/80 bg-zinc-50/50 hover:bg-zinc-100/80 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 transition cursor-pointer backdrop-blur-xl"
                     onClick={() =>
                       navigate(`/match/${match.matchId}`, {
-                        state: { puuid, gameName, tagLine, region, tier: primaryTier ?? undefined, rank: primaryRank ?? undefined },
+                        state: { puuid, gameName, tagLine, region, tier: match.tier ?? undefined, rank: match.rank ?? undefined },
                       })
                     }
                   >
@@ -368,7 +396,7 @@ export default function DashboardConsistent() {
                             <> • {formatMatchDate(match.gameEndTimestamp)}</>
                           )}
                         </div>
-                        {primaryTier && primaryRank && getMatchIdealLabel(match) && (
+                        {(match.tier ?? match.rank) && getMatchIdealLabel(match) && (
                           <div className="text-xs mt-1 text-purple-600 dark:text-purple-300">
                             Ideal do elo: {getMatchIdealLabel(match)}
                           </div>
@@ -400,7 +428,7 @@ export default function DashboardConsistent() {
                         onClick={(e) => {
                           e.stopPropagation();
                           navigate(`/match/${match.matchId}`, {
-                            state: { puuid, gameName, tagLine, region, tier: primaryTier ?? undefined, rank: primaryRank ?? undefined },
+                            state: { puuid, gameName, tagLine, region, tier: match.tier ?? undefined, rank: match.rank ?? undefined },
                           });
                         }}
                       >

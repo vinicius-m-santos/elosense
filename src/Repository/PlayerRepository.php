@@ -16,8 +16,30 @@ class PlayerRepository extends ServiceEntityRepository
         parent::__construct($registry, Player::class);
     }
 
+    public function add(Player $player, bool $flush = true): void
+    {
+        $this->getEntityManager()->persist($player);
+        if ($flush) {
+            $this->getEntityManager()->flush();
+        }
+    }
+
     public function findByPuuid(string $puuid): ?Player
     {
         return $this->findOneBy(['puuid' => $puuid]);
+    }
+
+    public function findByRiotId(string $gameName, string $tagLine): ?Player
+    {
+        $gameNameNormalized = mb_strtolower(trim($gameName));
+        $tagLineNormalized = mb_strtolower(trim($tagLine));
+
+        return $this->createQueryBuilder('p')
+            ->where('LOWER(p.name) = :gameName')
+            ->andWhere('LOWER(p.tag) = :tagLine')
+            ->setParameter('gameName', $gameNameNormalized)
+            ->setParameter('tagLine', $tagLineNormalized)
+            ->getQuery()
+            ->getOneOrNullResult();
     }
 }
