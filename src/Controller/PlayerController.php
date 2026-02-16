@@ -238,10 +238,12 @@ class PlayerController extends AbstractController
 
         $region = $request->query->get('region', '');
         $platform = $region !== '' ? $region : null;
+        $overrideTier = $request->query->get('tier', '');
+        $overrideRank = $request->query->get('rank', '');
 
         $existing = $this->playerMatchRepository->findByMatchIdAndPuuid($matchId, $puuid);
         if ($existing) {
-            return new JsonResponse($this->enrichMatchResponse($this->matchToArray($existing), $region, $player));
+            return new JsonResponse($this->enrichMatchResponse($this->matchToArray($existing), $region, $player, $overrideTier, $overrideRank));
         }
 
         try {
@@ -256,7 +258,7 @@ class PlayerController extends AbstractController
             $this->sampleMatchStorage->persistMatchPayload($matchPayload, strtoupper($region), $puuid, null, null);
         }
 
-        $enriched = $this->enrichMatchResponse($this->metricsToArray($metrics), $region, $player);
+        $enriched = $this->enrichMatchResponse($this->metricsToArray($metrics), $region, $player, $overrideTier, $overrideRank);
 
         if ($player) {
             $match = new PlayerMatch();
@@ -289,12 +291,15 @@ class PlayerController extends AbstractController
 
     /**
      * Add tier/rank (per queue), idealBenchmarks and analysis to match payload.
-     * Resolves tier/rank from the player's queueRanks using the match's queueId.
+     * When override tier/rank are provided (e.g. from query string), use them; otherwise resolve
+     * from the player's queueRanks using the match's queueId.
      *
      * @param array<string, mixed> $payload base match data (from matchToArray or metricsToArray)
+     * @param string|null $overrideTier optional tier from request (e.g. query param)
+     * @param string|null $overrideRank optional rank from request (empty for Master/GM/Challenger)
      * @return array<string, mixed>
      */
-    private function enrichMatchResponse(array $payload, string $region, Player $player): array
+    private function enrichMatchResponse(array $payload, string $region, Player $player, ?string $overrideTier = null, ?string $overrideRank = null): array
     {
         $queueId = $payload['queueId'] ?? null;
         $queueType = $queueId !== null && isset(self::QUEUE_ID_TO_QUEUE_TYPE[$queueId])
@@ -303,7 +308,11 @@ class PlayerController extends AbstractController
 
         $tier = '';
         $rank = '';
-        if ($queueType !== null && $region !== '') {
+        $overrideTierTrimmed = $overrideTier !== null ? trim((string) $overrideTier) : '';
+        if ($overrideTierTrimmed !== '') {
+            $tier = strtoupper($overrideTierTrimmed);
+            $rank = $overrideRank !== null ? trim((string) $overrideRank) : '';
+        } elseif ($queueType !== null && $region !== '') {
             foreach ($player->getQueueRanks() as $qr) {
                 if (strcasecmp($qr->getRegion(), $region) === 0 && $qr->getQueueType() === $queueType) {
                     $tier = $qr->getTier();

@@ -47,16 +47,22 @@ final class BenchmarkService
             return null;
         }
 
+        // Benchmarks for Master/GM/Challenger are stored with rank 'I' (normalization in SampleMatchStorageService).
+        $rankForLookup = $rank;
+        if ($rank === '' && $tierAllowsEmptyRank) {
+            $rankForLookup = 'I';
+        }
+
         // 1) Exact matchup
         if ($championId !== null && $opponentChampionId !== null) {
-            $benchmark = $this->benchmarkRepository->findOneByKeys($region, $queueId, $tier, $rank, $teamPosition, $championId, $opponentChampionId);
+            $benchmark = $this->benchmarkRepository->findOneByKeys($region, $queueId, $tier, $rankForLookup, $teamPosition, $championId, $opponentChampionId);
             if ($benchmark !== null) {
                 return $benchmark;
             }
         }
 
         // 2) Role-only (same tier/rank)
-        return $this->benchmarkRepository->findOneByKeys($region, $queueId, $tier, $rank, $teamPosition, null, null);
+        return $this->benchmarkRepository->findOneByKeys($region, $queueId, $tier, $rankForLookup, $teamPosition, null, null);
     }
 
     /**
