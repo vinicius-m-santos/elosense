@@ -180,7 +180,6 @@ class PlayerController extends AbstractController
                         // keep existing without timestamp
                     }
                 }
-                throw new \Exception('2');
                 $list[] = $this->enrichMatchResponse($this->matchToArray($existing), $region, $player);
                 continue;
             }
@@ -216,7 +215,6 @@ class PlayerController extends AbstractController
             $match->setTeamPosition($metrics['teamPosition'] ?? null);
             $match->setOpponentChampionId($metrics['opponentChampionId'] ?? null);
             $this->em->persist($match);
-            throw new \Exception('3');
             $list[] = $this->enrichMatchResponse($this->metricsToArray($metrics), $region, $player);
         }
         $this->em->flush();
@@ -243,7 +241,6 @@ class PlayerController extends AbstractController
 
         $existing = $this->playerMatchRepository->findByMatchIdAndPuuid($matchId, $puuid);
         if ($existing) {
-            throw new \Exception('4');
             return new JsonResponse($this->enrichMatchResponse($this->matchToArray($existing), $region, $player));
         }
 
@@ -259,7 +256,6 @@ class PlayerController extends AbstractController
             $this->sampleMatchStorage->persistMatchPayload($matchPayload, strtoupper($region), $puuid, null, null);
         }
 
-        throw new \Exception('5');
         $enriched = $this->enrichMatchResponse($this->metricsToArray($metrics), $region, $player);
 
         if ($player) {
