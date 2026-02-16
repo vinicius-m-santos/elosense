@@ -2,13 +2,11 @@
 
 namespace App\Controller;
 
-use App\Entity\Personal;
 use App\Entity\User;
 use App\Repository\UserRepository;
 use App\Service\EmailVerificationService;
 use App\Service\GoogleAuthService;
 use App\Service\PasswordResetService;
-use App\Service\SubscriptionService;
 use Doctrine\ORM\EntityManagerInterface;
 use Gesdinet\JWTRefreshTokenBundle\Generator\RefreshTokenGeneratorInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
@@ -33,7 +31,6 @@ class AuthController extends AbstractController
         private readonly EntityManagerInterface $em,
         private readonly EmailVerificationService $emailVerificationService,
         private readonly PasswordResetService $passwordResetService,
-        private readonly SubscriptionService $subscriptionService,
         private readonly GoogleAuthService $googleAuthService,
         private readonly JWTTokenManagerInterface $jwtManager,
         private readonly RefreshTokenGeneratorInterface $refreshTokenGenerator,
@@ -75,15 +72,11 @@ class AuthController extends AbstractController
             $user->setPassword(null);
             $user->setGoogleId($googleId);
             $user->setIsVerified(true);
-            $user->setRoles(['ROLE_USER', 'ROLE_PERSONAL']);
+            $user->setRoles(['ROLE_USER']);
             if (!empty($payload['picture'])) {
                 $user->setAvatarUrl($payload['picture']);
             }
             $this->em->persist($user);
-            $personal = new Personal();
-            $personal->setUser($user);
-            $this->em->persist($personal);
-            $this->subscriptionService->createSubscriptionForNewPersonal($personal);
             $this->em->flush();
         }
 
@@ -138,10 +131,6 @@ class AuthController extends AbstractController
                     $existingUser->setBirthDate($birthDate);
                 }
             }
-            $personal = $existingUser->getPersonal();
-            if ($personal && isset($data['cref'])) {
-                $personal->setCref($data['cref']);
-            }
             $this->em->flush();
             return new JsonResponse([
                 'success' => true,
@@ -168,7 +157,7 @@ class AuthController extends AbstractController
         $hashedPassword = $this->passwordHasher->hashPassword($user, $data['password']);
         $user->setPassword($hashedPassword);
 
-        $user->setRoles(['ROLE_USER', 'ROLE_PERSONAL']);
+        $user->setRoles(['ROLE_USER']);
 
         $errors = $this->validator->validate($user);
         if (count($errors) > 0) {
@@ -181,16 +170,6 @@ class AuthController extends AbstractController
         }
 
         $this->em->persist($user);
-
-        $personal = new Personal();
-        $personal->setUser($user);
-
-        if (isset($data['cref'])) {
-            $personal->setCref($data['cref']);
-        }
-
-        $this->em->persist($personal);
-        $this->subscriptionService->createSubscriptionForNewPersonal($personal);
         $this->em->flush();
 
         try {
@@ -226,18 +205,6 @@ class AuthController extends AbstractController
             'avatarKey' => $user->getAvatarKey(),
             'avatarUrl' => $user->getAvatarUrl(),
         ];
-        if ($user->getClient()) {
-            $response['client'] = [
-                'id' => $user->getClient()->getId(),
-                'name' => $user->getClient()->getName(),
-            ];
-        }
-        if ($user->getPersonal()) {
-            $response['personal'] = [
-                'id' => $user->getPersonal()->getId(),
-                'showPlatformExercises' => $user->getPersonal()->isShowPlatformExercises(),
-            ];
-        }
         return $response;
     }
 

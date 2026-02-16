@@ -2,12 +2,17 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Button } from "@/components/ui/button";
-import ButtonLoader from "@/components/ui/buttonLoader";
-import { Mail, CheckCircle, XCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Mail, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { useRequest } from "@/api/request";
 import { useApi } from "@/api/Api";
+import { AppHeader } from "@/components/AppHeader";
+import AppFooter from "@/components/AppFooter/AppFooter";
 
-const EmailVerification = () => {
+const inputClass = "bg-zinc-50 border-zinc-200 text-zinc-900 focus-visible:ring-purple-500 dark:bg-white/5 dark:border-white/10 dark:text-zinc-100";
+
+export default function EmailVerification() {
     const { token } = useParams<{ token: string }>();
     const location = useLocation();
     const navigate = useNavigate();
@@ -27,9 +32,7 @@ const EmailVerification = () => {
         setLoading(true);
         setError(null);
         setAlreadyVerified(false);
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (request as any)({
+        await (request as (opts: { method: string; url: string; showSuccess: boolean; onAccept: (p: { message?: string }) => void; onReject: (e: { message?: string }) => void }) => Promise<void>)({
             method: "GET",
             url: `/verify-email/${verificationToken}`,
             successMessage: "Email verificado com sucesso!",
@@ -44,10 +47,10 @@ const EmailVerification = () => {
             },
             onReject: (err: { message?: string }) => {
                 setLoading(false);
-                if (err.message === "Token de verificação inválido") {
+                if (err?.message === "Token de verificação inválido") {
                     setAlreadyVerified(true);
                 } else {
-                    setError(err.message || "Erro ao verificar email");
+                    setError(err?.message || "Erro ao verificar email");
                 }
             },
         });
@@ -65,32 +68,17 @@ const EmailVerification = () => {
             toast.error("Por favor, informe seu email");
             return;
         }
-
         setResending(true);
         try {
             const res = await api.post("/resend-verification", { email });
-            if (res.data.success) {
+            if (res.data?.success) {
                 toast.success(res.data.message);
             } else {
-                toast.error(res.data.message);
+                toast.error(res.data?.message ?? "Falha ao reenviar");
             }
-            return;
         } catch (e: unknown) {
-            const errorData = (e as { response?: { data?: { message?: string; error?: { message?: string } } } })?.response?.data;
-            if (errorData?.message) {
-                setError(errorData.message);
-                toast.error(errorData.message);
-                return;
-            } else if (errorData?.error?.message) {
-                const errorMessage = errorData.error.message;
-                setError(errorMessage);
-                toast.error(errorMessage);
-                return;
-            } else {
-                setError("Erro ao reenviar email");
-                toast.error("Erro ao reenviar email");
-                return;
-            }
+            const err = e as { response?: { data?: { message?: string } } };
+            toast.error(err?.response?.data?.message ?? "Erro ao reenviar email");
         } finally {
             setResending(false);
         }
@@ -98,150 +86,151 @@ const EmailVerification = () => {
 
     if (isNotVerifiedPage) {
         return (
-            <div className="min-h-[80vh] flex items-center justify-center px-4 py-10">
-                <div className="bg-white shadow-md rounded-2xl p-8 w-full max-w-md animate-fade-in text-center">
-                    <div className="mb-6 flex justify-center">
-                        <Mail className="h-16 w-16 text-blue-600" />
-                    </div>
-                    <h2 className="text-3xl font-bold text-gray-800 mb-4">
-                        Verifique seu Email
-                    </h2>
-                    <p className="text-gray-600 mb-6">
-                        Sua conta ainda não foi verificada. Por favor, verifique sua caixa de entrada
-                        e clique no link de verificação que enviamos para você.
-                    </p>
-                    <p className="text-gray-600 mb-8">
-                        Não recebeu o email? Informe seu endereço de email abaixo e reenviaremos o link.
-                    </p>
-
-                    <div className="space-y-4">
-                        <div>
-                            <label
-                                htmlFor="email"
-                                className="block text-sm font-medium text-gray-700 mb-2 text-left"
-                            >
-                                Email
-                            </label>
-                            <input
-                                type="email"
-                                id="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className="w-full text-black border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="seu@email.com"
-                            />
-                        </div>
-
-                        <Button
-                            onClick={resendVerification}
-                            disabled={resending || !email}
-                            className="w-full bg-blue-600 cursor-pointer text-white font-semibold rounded-lg py-2 hover:bg-blue-700 transition-colors disabled:opacity-80"
-                        >
-                            {!resending && "Reenviar Email de Verificação"}
-                            {resending && <ButtonLoader />}
-                        </Button>
-
-                        <Button
-                            onClick={() => navigate("/login")}
-                            variant="outline"
-                            className="w-full text-black cursor-pointer"
-                        >
-                            Voltar para Login
-                        </Button>
-                    </div>
+            <div className="min-h-screen w-full transition-colors duration-500 bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
+                <div className="pointer-events-none fixed inset-0 overflow-hidden">
+                    <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[500px] w-[500px] rounded-full bg-purple-600/20 blur-[120px]" />
+                    <div className="absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-blue-600/20 blur-[120px]" />
                 </div>
+                <AppHeader backTo="/" badgeLabel="Verificação" maxWidth="max-w-6xl" />
+                <main className="relative z-10 flex flex-col items-center justify-center px-6 py-16">
+                    <Card className="w-full max-w-md border-zinc-200/80 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
+                        <CardContent className="p-8 text-center">
+                            <div className="mb-6 flex justify-center">
+                                <Mail className="h-16 w-16 text-purple-400" />
+                            </div>
+                            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-4">Verifique seu email</h2>
+                            <p className="text-zinc-500 mb-4">
+                                Sua conta ainda não foi verificada. Verifique sua caixa de entrada e clique no link que enviamos.
+                            </p>
+                            <p className="text-zinc-500 mb-6">
+                                Não recebeu? Informe seu email abaixo para reenviarmos o link.
+                            </p>
+                            <div className="space-y-4 text-left">
+                                <label htmlFor="email" className="text-sm text-zinc-500">Email</label>
+                                <Input
+                                    id="email"
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="seu@email.com"
+                                    className={inputClass}
+                                />
+                                <Button
+                                    onClick={resendVerification}
+                                    disabled={resending || !email}
+                                    className="w-full bg-gradient-to-r from-purple-500 to-blue-500 text-white"
+                                >
+                                    {resending ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Reenviar email de verificação"}
+                                </Button>
+                                <Button onClick={() => navigate("/login")} variant="outline" className="w-full">
+                                    Voltar para Login
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </main>
+                <AppFooter />
             </div>
         );
     }
 
-    return (
-        <div className="min-h-[80vh] flex items-center justify-center px-4 py-10">
-            <div className="bg-white shadow-md rounded-2xl p-8 w-full max-w-md animate-fade-in text-center">
-                {loading && (
-                    <>
-                        <div className="mb-6 flex justify-center">
-                            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600"></div>
-                        </div>
-                        <h2 className="text-2xl font-bold text-gray-800 mb-4">
-                            Verificando...
-                        </h2>
-                        <p className="text-gray-600">
-                            Aguarde enquanto verificamos sua conta.
-                        </p>
-                    </>
-                )}
-
-                {verified && !loading && (
-                    <>
-                        <div className="mb-6 flex justify-center">
-                            <CheckCircle className="h-16 w-16 text-green-600" />
-                        </div>
-                        <h2 className="text-3xl font-bold text-gray-800 mb-4">
-                            Email Verificado!
-                        </h2>
-                        <p className="text-gray-600 mb-6">
-                            Sua conta foi verificada com sucesso. Você será redirecionado para a página de login.
-                        </p>
-                        <Button
-                            onClick={() => navigate("/login")}
-                            className="bg-blue-600 cursor-pointer text-white font-semibold rounded-lg py-2 px-6 hover:bg-blue-700 transition-colors"
-                        >
-                            Ir para Login
-                        </Button>
-                    </>
-                )}
-
-                {alreadyVerified && !loading && !verified && (
-                    <>
-                        <div className="mb-6 flex justify-center">
-                            <CheckCircle className="h-16 w-16 text-green-600" />
-                        </div>
-                        <h2 className="text-3xl font-bold text-gray-800 mb-4">
-                            Conta Já Verificada
-                        </h2>
-                        <p className="text-gray-600 mb-6">
-                            Sua conta já foi verificada anteriormente. Você pode fazer login normalmente.
-                        </p>
-                        <Button
-                            onClick={() => navigate("/login")}
-                            className="w-full bg-blue-600 cursor-pointer text-white font-semibold rounded-lg py-2 hover:bg-blue-700 transition-colors"
-                        >
-                            Voltar para Login
-                        </Button>
-                    </>
-                )}
-
-                {error && !loading && !verified && !alreadyVerified && (
-                    <>
-                        <div className="mb-6 flex justify-center">
-                            <XCircle className="h-16 w-16 text-red-600" />
-                        </div>
-                        <h2 className="text-3xl font-bold text-gray-800 mb-4">
-                            Erro na Verificação
-                        </h2>
-                        <p className="text-gray-600 mb-6">
-                            {error}
-                        </p>
-                        <div className="space-y-3">
-                            <Button
-                                onClick={() => navigate("/email-not-verified")}
-                                className="w-full bg-blue-600 cursor-pointer text-white font-semibold rounded-lg py-2 hover:bg-blue-700 transition-colors"
-                            >
-                                Reenviar Email de Verificação
-                            </Button>
-                            <Button
-                                onClick={() => navigate("/login")}
-                                variant="outline"
-                                className="w-full text-black cursor-pointer"
-                            >
-                                Voltar para Login
-                            </Button>
-                        </div>
-                    </>
-                )}
+    if (loading) {
+        return (
+            <div className="min-h-screen w-full bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
+                <div className="pointer-events-none fixed inset-0 overflow-hidden">
+                    <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[500px] w-[500px] rounded-full bg-purple-600/20 blur-[120px]" />
+                    <div className="absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-blue-600/20 blur-[120px]" />
+                </div>
+                <AppHeader backTo="/" badgeLabel="Verificação" maxWidth="max-w-6xl" />
+                <main className="relative z-10 flex flex-col items-center justify-center px-6 py-16">
+                    <Card className="w-full max-w-md border-zinc-200/80 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
+                        <CardContent className="p-8 text-center">
+                            <Loader2 className="h-16 w-16 animate-spin text-purple-400 mx-auto mb-4" />
+                            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">Verificando...</h2>
+                            <p className="text-zinc-500">Aguarde enquanto verificamos sua conta.</p>
+                        </CardContent>
+                    </Card>
+                </main>
+                <AppFooter />
             </div>
+        );
+    }
+
+    let children: React.ReactNode;
+    if (verified) {
+        children = (
+            <>
+                <div className="mb-6 flex justify-center">
+                    <CheckCircle className="h-16 w-16 text-emerald-500" />
+                </div>
+                <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-4">Email verificado!</h2>
+                <p className="text-zinc-500 mb-6">
+                    Sua conta foi verificada com sucesso. Você já pode fazer login.
+                </p>
+                <Button
+                    onClick={() => navigate("/login")}
+                    className="w-full bg-gradient-to-r from-purple-500 to-blue-500 text-white"
+                >
+                    Ir para Login
+                </Button>
+            </>
+        );
+    } else if (alreadyVerified) {
+        children = (
+            <>
+                <div className="mb-6 flex justify-center">
+                    <CheckCircle className="h-16 w-16 text-emerald-500" />
+                </div>
+                <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-4">Conta já verificada</h2>
+                <p className="text-zinc-500 mb-6">
+                    Sua conta já foi verificada. Você pode fazer login normalmente.
+                </p>
+                <Button
+                    onClick={() => navigate("/login")}
+                    className="w-full bg-gradient-to-r from-purple-500 to-blue-500 text-white"
+                >
+                    Ir para Login
+                </Button>
+            </>
+        );
+    } else {
+        children = (
+            <>
+                <div className="mb-6 flex justify-center">
+                    <XCircle className="h-16 w-16 text-red-400" />
+                </div>
+                <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-4">Erro na verificação</h2>
+                <p className="text-zinc-500 mb-6">{error}</p>
+                <div className="space-y-3">
+                    <Button
+                        onClick={() => navigate("/email-not-verified")}
+                        className="w-full bg-gradient-to-r from-purple-500 to-blue-500 text-white"
+                    >
+                        Reenviar email de verificação
+                    </Button>
+                    <Button onClick={() => navigate("/login")} variant="outline" className="w-full">
+                        Voltar para Login
+                    </Button>
+                </div>
+            </>
+        );
+    }
+
+    return (
+        <div className="min-h-screen w-full transition-colors duration-500 bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
+            <div className="pointer-events-none fixed inset-0 overflow-hidden">
+                <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[500px] w-[500px] rounded-full bg-purple-600/20 blur-[120px]" />
+                <div className="absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-blue-600/20 blur-[120px]" />
+            </div>
+            <AppHeader backTo="/" badgeLabel="Verificação" maxWidth="max-w-6xl" />
+            <main className="relative z-10 flex flex-col items-center justify-center px-6 py-16">
+                <Card className="w-full max-w-md border-zinc-200/80 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
+                    <CardContent className="p-8 text-center">
+                        {children}
+                    </CardContent>
+                </Card>
+            </main>
+            <AppFooter />
         </div>
     );
-};
-
-export default EmailVerification;
+}

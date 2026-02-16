@@ -86,7 +86,7 @@ class PlayerController extends AbstractController
                 'message' => $e->getMessage(),
                 'exception' => $e::class,
             ]);
-            $payload = ['entries' => []];
+            $payload = ['entries' => [], 'profileIconId' => null];
             if ($this->getParameter('kernel.environment') === 'dev') {
                 $payload['errorDetail'] = $this->rankErrorDetail($e);
             }
@@ -107,7 +107,19 @@ class PlayerController extends AbstractController
                 'losses' => (int) ($entry['losses'] ?? 0),
             ];
         }
-        return new JsonResponse(['entries' => $entries]);
+
+        $profileIconId = null;
+        try {
+            $summoner = $this->riotApiService->getSummonerByPuuid($platform, $puuid);
+            $profileIconId = isset($summoner['profileIconId']) ? (int) $summoner['profileIconId'] : null;
+        } catch (\Throwable) {
+            // Keep profileIconId null; entries are already available
+        }
+
+        return new JsonResponse([
+            'entries' => $entries,
+            'profileIconId' => $profileIconId,
+        ]);
     }
 
     private function rankErrorDetail(\Throwable $e): string
@@ -293,7 +305,10 @@ class PlayerController extends AbstractController
         }
         $queueId = $payload['queueId'] ?? null;
         $teamPosition = $payload['teamPosition'] ?? null;
-        if ($region === '' || $tier === '' || $rank === '' || $teamPosition === null || $teamPosition === '') {
+        $tiersWithoutRank = ['MASTER', 'GRANDMASTER', 'CHALLENGER'];
+        $tierAllowsEmptyRank = $tier !== '' && \in_array(strtoupper($tier), $tiersWithoutRank, true);
+        $rankRequired = !$tierAllowsEmptyRank && $rank === '';
+        if ($region === '' || $tier === '' || $rankRequired || $teamPosition === null || $teamPosition === '') {
             $payload['idealBenchmarks'] = null;
             $payload['analysis'] = ['insights' => [], 'summary' => $this->matchAnalysisService->analyze([], null)['summary']];
             return $payload;

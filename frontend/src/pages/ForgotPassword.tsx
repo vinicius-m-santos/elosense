@@ -2,141 +2,159 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 import ButtonLoader from "@/components/ui/buttonLoader";
-import { Mail, ArrowLeft } from "lucide-react";
+import { Mail } from "lucide-react";
 import { useApi } from "@/api/Api";
+import { AppHeader } from "@/components/AppHeader";
+import AppFooter from "@/components/AppFooter/AppFooter";
 
-const ForgotPassword = () => {
-    const [email, setEmail] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [emailSent, setEmailSent] = useState(false);
-    const api = useApi();
-    const navigate = useNavigate();
+const inputClass =
+  "bg-zinc-50 border-zinc-200 text-zinc-900 focus-visible:ring-purple-500 dark:bg-white/5 dark:border-white/10 dark:text-zinc-100";
 
-    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        setLoading(true);
+export default function ForgotPassword() {
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const api = useApi();
+  const navigate = useNavigate();
 
-        try {
-            const res = await api.post("/forgot-password", { email });
-            if (res.data.success) {
-                setEmailSent(true);
-                toast.success(res.data.message);
-            } else {
-                toast.error(res.data.message);
-            }
-        } catch (e: any) {
-            const data = e.response?.data;
-            if (data?.message) {
-                toast.error(data.message);
-            } else {
-                toast.error("Erro ao enviar email de recuperação");
-            }
-        } finally {
-            setLoading(false);
-        }
-    };
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
 
-    if (emailSent) {
-        return (
-            <div className="min-h-[80vh] flex items-center justify-center px-4 py-10">
-                <div className="bg-white shadow-md rounded-2xl p-8 w-full max-w-md animate-fade-in text-center">
-                    <div className="mb-6 flex justify-center">
-                        <Mail className="h-16 w-16 text-blue-600" />
-                    </div>
-                    <h2 className="text-3xl font-bold text-gray-800 mb-4">
-                        Email Enviado!
-                    </h2>
-                    <p className="text-gray-600 mb-6">
-                        Enviamos um link de recuperação de senha para <strong>{email}</strong>.
-                        Verifique sua caixa de entrada e siga as instruções.
-                    </p>
-                    <p className="text-gray-600 mb-8 text-sm">
-                        O link expira em 24 horas.
-                    </p>
-                    <div className="space-y-3">
-                        <Button
-                            onClick={() => navigate("/login")}
-                            className="w-full bg-blue-600 cursor-pointer text-white font-semibold rounded-lg py-2 hover:bg-blue-700 transition-colors"
-                        >
-                            Voltar para Login
-                        </Button>
-                        <Button
-                            onClick={() => {
-                                setEmailSent(false);
-                                setEmail("");
-                            }}
-                            variant="outline"
-                            className="w-full text-black cursor-pointer"
-                        >
-                            Enviar para outro email
-                        </Button>
-                    </div>
-                </div>
-            </div>
-        );
+    try {
+      const res = await api.post("/forgot-password", { email });
+      if (res.data.success) {
+        setEmailSent(true);
+        toast.success(res.data.message);
+      } else {
+        toast.error(res.data.message);
+      }
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      const data = err.response?.data;
+      if (data?.message) {
+        toast.error(data.message);
+      } else {
+        toast.error("Erro ao enviar email de recuperação");
+      }
+    } finally {
+      setLoading(false);
     }
+  };
 
+  if (emailSent) {
     return (
-        <div className="min-h-[80vh] flex items-center justify-center px-4 py-10">
-            <div className="bg-white shadow-md rounded-2xl p-6 w-full max-w-sm animate-fade-in">
-                <div className="mb-6">
-                    <Button
-                        onClick={() => navigate("/login")}
-                        variant="ghost"
-                        size="icon"
-                        className="mb-4"
-                    >
-                        <ArrowLeft className="h-5 w-5" />
-                    </Button>
-                    <h2 className="text-3xl font-bold text-gray-800 text-center mb-2">
-                        Recuperar Senha
-                    </h2>
-                    <p className="text-center text-gray-500 mb-8 text-sm">
-                        Digite seu email e enviaremos um link para redefinir sua senha
-                    </p>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    <div>
-                        <label
-                            htmlFor="email"
-                            className="block text-sm font-medium text-gray-700 mb-1"
-                        >
-                            Email
-                        </label>
-                        <input
-                            type="email"
-                            id="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            className="w-full text-black border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="seu@email.com"
-                            required
-                        />
-                    </div>
-
-                    <Button
-                        type="submit"
-                        className="w-full bg-blue-600 cursor-pointer text-white font-semibold rounded-lg py-2 hover:bg-blue-700 transition-colors disabled:opacity-80"
-                        disabled={loading}
-                    >
-                        {!loading && "Enviar Link de Recuperação"}
-                        {loading && <ButtonLoader />}
-                    </Button>
-                </form>
-
-                <div className="text-center mt-4">
-                    <button
-                        onClick={() => navigate("/login")}
-                        className="text-sm text-blue-600 hover:underline cursor-pointer"
-                    >
-                        Voltar para Login
-                    </button>
-                </div>
-            </div>
+      <div className="min-h-screen w-full transition-colors duration-500 bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
+        <div className="pointer-events-none fixed inset-0 overflow-hidden">
+          <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[500px] w-[500px] rounded-full bg-purple-600/20 blur-[120px]" />
+          <div className="absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-blue-600/20 blur-[120px]" />
         </div>
+        <AppHeader backTo="/login" badgeLabel="Recuperar senha" maxWidth="max-w-6xl" />
+        <main className="relative z-10 flex flex-col items-center justify-center px-6 py-16">
+          <Card className="w-full max-w-md border-zinc-200/80 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
+            <CardContent className="p-8 text-center">
+              <div className="mb-6 flex justify-center">
+                <Mail className="h-16 w-16 text-purple-500 dark:text-purple-400" />
+              </div>
+              <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-4">
+                Email enviado!
+              </h2>
+              <p className="text-zinc-600 dark:text-zinc-400 mb-6">
+                Enviamos um link de recuperação de senha para{" "}
+                <strong className="text-zinc-900 dark:text-zinc-100">{email}</strong>.
+                Verifique sua caixa de entrada e siga as instruções.
+              </p>
+              <p className="text-zinc-600 dark:text-zinc-400 mb-8 text-sm">
+                O link expira em 24 horas.
+              </p>
+              <div className="space-y-3">
+                <Button
+                  onClick={() => navigate("/login")}
+                  className="w-full bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:opacity-90"
+                >
+                  Voltar para Login
+                </Button>
+                <Button
+                  onClick={() => {
+                    setEmailSent(false);
+                    setEmail("");
+                  }}
+                  variant="outline"
+                  className="w-full border-zinc-200 text-zinc-900 dark:border-white/10 dark:text-zinc-100 hover:bg-white/10"
+                >
+                  Enviar para outro email
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </main>
+        <AppFooter />
+      </div>
     );
-};
+  }
 
-export default ForgotPassword;
+  return (
+    <div className="min-h-screen w-full transition-colors duration-500 bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[500px] w-[500px] rounded-full bg-purple-600/20 blur-[120px]" />
+        <div className="absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-blue-600/20 blur-[120px]" />
+      </div>
+      <AppHeader backTo="/login" badgeLabel="Recuperar senha" maxWidth="max-w-6xl" />
+      <main className="relative z-10 flex flex-col items-center justify-center px-6 py-16">
+        <Card className="w-full max-w-sm border-zinc-200/80 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
+          <CardContent className="p-6">
+            <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 text-center mb-2">
+              Recuperar senha
+            </h2>
+            <p className="text-center text-zinc-500 mb-6 text-sm">
+              Digite seu email e enviaremos um link para redefinir sua senha
+            </p>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="space-y-2">
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-medium text-zinc-600 dark:text-zinc-400"
+                >
+                  Email
+                </label>
+                <Input
+                  type="email"
+                  id="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={inputClass}
+                  placeholder="seu@email.com"
+                  required
+                />
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:opacity-90 disabled:opacity-80"
+                disabled={loading}
+              >
+                {!loading && "Enviar link de recuperação"}
+                {loading && <ButtonLoader />}
+              </Button>
+            </form>
+
+            <div className="text-center mt-4">
+              <button
+                type="button"
+                onClick={() => navigate("/login")}
+                className="text-sm text-purple-400 hover:underline"
+              >
+                Voltar para Login
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      </main>
+      <AppFooter />
+    </div>
+  );
+}

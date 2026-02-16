@@ -45,7 +45,7 @@ export default function UuidRoute({ children }) {
     }, [client, token]);
 
     if (loading) {
-        return <Loader loading={loading} />;
+        return <Loader loading={loading} message="Carregando dados" />;
     }
 
     if (!valid) return <Navigate to="/" replace />;

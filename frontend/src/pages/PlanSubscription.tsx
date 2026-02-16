@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Users, CreditCard, Calendar, RefreshCw } from "lucide-react";
 import type { SubscriptionMe } from "@/types/subscription";
-import Loader from "@/components/ui/loader";
+import { SkeletonPlanSubscription } from "@/components/ui/skeleton";
+import AppFooter from "@/components/AppFooter/AppFooter";
 
 export default function PlanSubscription() {
   const request = useRequest();
@@ -28,8 +29,8 @@ export default function PlanSubscription() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto px-4 py-8 flex justify-center">
-        <Loader loading />
+      <div className="container mx-auto px-4 py-8">
+        <SkeletonPlanSubscription />
       </div>
     );
   }
@@ -106,6 +107,7 @@ export default function PlanSubscription() {
       <p className="mt-6 text-sm text-gray-500">
         Em breve teremos planos pagos com mais vagas para alunos. Você será avisado.
       </p>
+      <AppFooter />
     </div>
   );
 }

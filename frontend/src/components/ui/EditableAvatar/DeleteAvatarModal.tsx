@@ -31,28 +31,72 @@ export default function DeleteAvatarModal({
         {children ?? (
           <Button
             size="icon"
-            variant="destructive"
-            className="absolute cursor-pointer w-8 h-8 text-white rounded-full bottom-0 right-0 opacity-80 hover:opacity-100 transition-opacity z-10"
+            className="
+              absolute bottom-0 right-0 z-10 w-8 h-8 rounded-full
+              bg-red-600 hover:bg-red-500
+              text-white shadow-md
+              transition-all duration-200
+              hover:scale-105
+            "
           >
             <Trash2 className="w-4 h-4" />
           </Button>
         )}
       </AlertDialogTrigger>
 
-      <AlertDialogContent className="rounded-md w-[90vw] max-w-[400px] sm:max-w-[500px] md:max-w-[600px] max-h-[85vh] overflow-y-auto">
-        <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription>
-            Essa ação removerá a foto atual permanentemente. Você poderá enviar
-            uma nova imagem depois, se desejar.
+      <AlertDialogContent
+        className="
+          w-[92vw] max-w-md
+          rounded-2xl border
+          
+          bg-white border-zinc-200 text-zinc-900
+          dark:bg-zinc-900/95 dark:border-white/10 dark:text-zinc-100
+          
+          backdrop-blur-xl
+          shadow-2xl
+        "
+      >
+        <AlertDialogHeader className="space-y-3">
+          <div className="flex items-center gap-3">
+            <div
+              className="
+                flex items-center justify-center
+                w-10 h-10 rounded-xl
+                bg-red-100 text-red-600
+                dark:bg-red-500/15 dark:text-red-400
+              "
+            >
+              <Trash2 className="w-5 h-5" />
+            </div>
+
+            <AlertDialogTitle className="text-lg font-semibold">
+              {title}
+            </AlertDialogTitle>
+          </div>
+
+          <AlertDialogDescription
+            className="
+              text-sm leading-relaxed
+              text-zinc-600
+              dark:text-zinc-400
+            "
+          >
+            Essa ação removerá sua foto atual permanentemente.
+            Você poderá enviar uma nova imagem depois, se desejar.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
+
+        <AlertDialogFooter className="mt-6 gap-2 sm:gap-3">
           <AlertDialogCancel asChild>
-            <OutlineButton />
+            <OutlineButton>
+              Cancelar
+            </OutlineButton>
           </AlertDialogCancel>
+
           <AlertDialogAction onClick={onConfirm} asChild>
-            <DangerButton />
+            <DangerButton>
+              Remover foto
+            </DangerButton>
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -8,6 +8,11 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\File\File;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
+/**
+ * Armazena e recupera arquivos (avatar, etc.) no Amazon S3.
+ * Requer que o bucket definido em AWS_BUCKET já exista na região AWS_REGION.
+ * Se aparecer "NoSuchBucket": crie o bucket no console AWS S3 (mesma região do .env).
+ */
 class S3Service
 {
     private S3Client $s3Client;

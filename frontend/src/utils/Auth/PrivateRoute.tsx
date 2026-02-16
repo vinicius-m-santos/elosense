@@ -11,10 +11,11 @@ type PrivateRouteProps = {
 };
 
 const PrivateRoute = ({ children, allowedRoles }: PrivateRouteProps) => {
-    const { isAuthenticated, user } = useAuth();
+    const { isAuthenticated, user, isValidating } = useAuth();
     const location = useLocation();
 
-    if (!isAuthenticated) {
+    /** Não redireciona durante validação; renderiza children com skeletons nos componentes filhos */
+    if (!isValidating && !isAuthenticated) {
         return <Navigate to="/login" state={{ from: location }} replace />;
     }
 
@@ -23,12 +24,7 @@ const PrivateRoute = ({ children, allowedRoles }: PrivateRouteProps) => {
             user.roles.includes(role)
         );
         if (!hasAllowedRole) {
-            const redirectTo = user.roles.includes(ROLE_CLIENT)
-                ? "/student"
-                : user.roles.includes(ROLE_PERSONAL)
-                  ? "/week-summary"
-                  : "/login";
-            return <Navigate to={redirectTo} replace />;
+            return <Navigate to="/" replace />;
         }
     }
 

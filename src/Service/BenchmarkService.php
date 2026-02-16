@@ -39,7 +39,12 @@ final class BenchmarkService
         $championId = isset($context['championId']) && $context['championId'] !== null ? (int) $context['championId'] : null;
         $opponentChampionId = isset($context['opponentChampionId']) && $context['opponentChampionId'] !== null ? (int) $context['opponentChampionId'] : null;
 
-        if ($region === '' || $tier === '' || $rank === '') {
+        $tiersWithoutRank = ['MASTER', 'GRANDMASTER', 'CHALLENGER'];
+        $tierAllowsEmptyRank = \in_array($tier, $tiersWithoutRank, true);
+        if ($region === '' || $tier === '') {
+            return null;
+        }
+        if ($rank === '' && !$tierAllowsEmptyRank) {
             return null;
         }
 

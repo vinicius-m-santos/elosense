@@ -54,14 +54,12 @@ class UserService
         }
 
         $user->setAvatarKey($filePath);
-        $url = $this->s3Service->generateFileUrl($filePath) ?? '';
+        $this->add($user);
 
+        $url = $this->s3Service->generateFileUrl($filePath) ?? '';
         if (empty($url)) {
             throw new UnprocessableEntityHttpException('Erro ao salvar imagem');
         }
-
-        $user->setAvatarUrl($url);
-        $this->add($user);
 
         return $url;
     }

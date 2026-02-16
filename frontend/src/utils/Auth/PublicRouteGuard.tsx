@@ -41,7 +41,7 @@ export default function PublicRouteGuard({ children }: PublicRouteGuardProps) {
     return getRoleHome(auth.user!);
   }, [location.pathname]);
 
-  if (redirectTo) {
+  if (redirectTo && redirectTo !== location.pathname) {
     return <Navigate to={redirectTo} replace />;
   }
 

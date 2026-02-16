@@ -3,7 +3,6 @@
 namespace App\Controller;
 
 use App\Entity\User;
-use App\Repository\ClientRepository;
 use App\Repository\UserRepository;
 use App\Service\S3Service;
 use App\Service\UserService;
@@ -26,39 +25,11 @@ class UserController extends AbstractController
     public function __construct(
         private readonly UserService $userService,
         private readonly UserRepository $userRepository,
-        private readonly ClientRepository $clientRepository,
         private readonly NormalizerInterface $normalizer,
         private readonly ValidatorInterface $validator,
         private readonly S3Service $s3Service,
         private readonly UserPasswordHasherInterface $passwordHasher
     ) {}
-
-    #[Route('/check-token/{token}/{client}', name: 'check_user_token', methods: ['GET'])]
-    public function checkUserToken(string $token, string $client): JsonResponse
-    {
-        try {
-            $token = trim($token);
-            $client = trim($client);
-            if (strlen($token) === 0 || strlen($client) === 0) {
-                throw new UnprocessableEntityHttpException('Link inválido');
-            }
-
-            $user = $this->userRepository->findOneBy(['uuid' => $token]);
-            if ($user === null) {
-                throw new UnprocessableEntityHttpException('Link inválido');
-            }
-
-            $client = $this->clientRepository->findOneBy(['uuid' => $client]);
-            if ($client === null) {
-                throw new UnprocessableEntityHttpException('Link inválido');
-            }
-
-            $normalizedData = $this->normalizer->normalize($client, 'json', ['groups' => ['client_all']]);
-            return new JsonResponse(['data' => $normalizedData], 200);
-        } catch (Exception $e) {
-            throw new UnprocessableEntityHttpException('Erro ao carregar página');
-        }
-    }
 
     // #[Route('/update', name: 'update_user', methods: ['PUT'])]
     // public function update(Request $request): JsonResponse
@@ -208,7 +179,8 @@ class UserController extends AbstractController
             $user->setBirthDate($birthDate);
         }
 
-        if (isset($data['avatarUrl'])) {
+        // Do not persist avatarUrl from client when user has S3 avatar (avatarKey); URL is generated on the fly
+        if (isset($data['avatarUrl']) && empty($user->getAvatarKey())) {
             $user->setAvatarUrl($data['avatarUrl']);
         }
 
@@ -223,14 +195,13 @@ class UserController extends AbstractController
             throw new Exception($errorMessage, 400);
         }
 
-        $avatarKey = $user->getAvatarKey();
-        if (isset($avatarKey)) {
-            $user->setAvatarUrl($this->s3Service->generateFileUrl($avatarKey));
-        }
-
         $this->userService->add($user);
 
         $normalizedData = $this->normalizer->normalize($user, 'json', ['groups' => ['user_all']]);
+        $avatarKey = $user->getAvatarKey();
+        if (!empty($avatarKey)) {
+            $normalizedData['avatarUrl'] = $this->s3Service->generateFileUrl($avatarKey);
+        }
         return new JsonResponse(['data' => $normalizedData]);
     }
 
@@ -256,20 +227,9 @@ class UserController extends AbstractController
             $user->setAppNotifications((bool)$data['appNotifications']);
         }
 
-        $personal = $user->getPersonal();
-        if ($personal !== null && array_key_exists('showPlatformExercises', $data)) {
-            $personal->setShowPlatformExercises((bool)$data['showPlatformExercises']);
-        }
-
         $this->userService->add($user);
 
         $normalizedData = $this->normalizer->normalize($user, 'json', ['groups' => ['user_all']]);
-        if ($personal !== null) {
-            $normalizedData['personal'] = [
-                'id' => $personal->getId(),
-                'showPlatformExercises' => $personal->isShowPlatformExercises(),
-            ];
-        }
         return new JsonResponse(['data' => $normalizedData]);
     }
 

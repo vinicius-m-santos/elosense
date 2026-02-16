@@ -18,6 +18,7 @@ import ResetPassword from "./pages/ResetPassword";
 import PlanSubscription from "./pages/PlanSubscription";
 import MatchDetail from "./pages/MatchDetail";
 import DashboardAlt from "./pages/Dashboard";
+import Profile from "./pages/Profile";
 
 export default function App() {
     return (
@@ -120,6 +121,16 @@ export default function App() {
                             <ResetPassword />
                         </PublicRouteGuard>
                     </NoAuthLayout>
+                }
+            />
+            <Route
+                path="/profile"
+                element={
+                    <PrivateRoute>
+                        <NoAuthLayout>
+                            <Profile />
+                        </NoAuthLayout>
+                    </PrivateRoute>
                 }
             />
             <Route
