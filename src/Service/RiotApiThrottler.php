@@ -23,6 +23,9 @@ class RiotApiThrottler
     /** Throttle type: summoner by-puuid or by-id (1600/1min). */
     public const TYPE_SUMMONER = 'summoner';
 
+    /** Throttle type: league-v4 entries by puuid (1600/1min). */
+    public const TYPE_LEAGUE_BY_PUUID = 'league_by_puuid';
+
     /** Throttle type: match-v5 (match ids by puuid + match by id share limit, 2000/10s). */
     public const TYPE_MATCH_V5 = 'match_v5';
 
@@ -39,6 +42,9 @@ class RiotApiThrottler
             [475, 600], // 500/10min -> 475/600s
         ],
         self::TYPE_SUMMONER => [
+            [1500, 60], // 1600/1min -> 1500/60s
+        ],
+        self::TYPE_LEAGUE_BY_PUUID => [
             [1500, 60], // 1600/1min -> 1500/60s
         ],
         self::TYPE_MATCH_V5 => [

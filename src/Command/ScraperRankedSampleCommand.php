@@ -111,7 +111,13 @@ final class ScraperRankedSampleCommand extends Command
                     ? RiotApiThrottler::TYPE_LEAGUE_ENTRIES
                     : RiotApiThrottler::TYPE_LEAGUE_MASTER_GM_CHALLENGER;
                 $this->throttler->waitIfNeeded($throttleType);
-                $entries = $this->fetchEntries($platform, $queueName, $tier, $rank);
+                try {
+                    $entries = $this->runWith429Retry($io, fn () => $this->fetchEntries($platform, $queueName, $tier, $rank), 'LeagueEntries', $retryAfterDefault);
+                } catch (\Throwable $e) {
+                    $io->writeln('  <comment>League entries error: ' . $e->getMessage() . '</comment>');
+                    $this->throttler->recordRequest($throttleType);
+                    continue;
+                }
                 $this->throttler->recordRequest($throttleType);
                 if ($entries === []) {
                     $io->writeln('  No entries.');
@@ -134,7 +140,7 @@ final class ScraperRankedSampleCommand extends Command
                         if ($summonerId !== null && $summonerId !== '') {
                             $this->throttler->waitIfNeeded(RiotApiThrottler::TYPE_SUMMONER);
                             try {
-                                $summoner = $this->riotApi->getSummonerBySummonerId($platform, $summonerId);
+                                $summoner = $this->runWith429Retry($io, fn () => $this->riotApi->getSummonerBySummonerId($platform, $summonerId), 'Summoner', $retryAfterDefault);
                                 $puuid = $summoner['puuid'] ?? null;
                             } catch (\Throwable $e) {
                                 $io->writeln('  <comment>Summoner error: ' . $e->getMessage() . '</comment>');
@@ -174,7 +180,14 @@ final class ScraperRankedSampleCommand extends Command
                         }
                         $this->throttler->recordRequest(RiotApiThrottler::TYPE_MATCH_V5);
 
-                        $this->sampleStorage->persistMatchPayload($matchPayload, $region, $puuid, $entryTier, $entryRank);
+                        try {
+                            $this->runWith429Retry($io, function () use ($matchPayload, $region, $puuid, $entryTier, $entryRank, $platform): void {
+                                $this->sampleStorage->persistMatchPayload($matchPayload, $region, $puuid, $entryTier, $entryRank, true, $platform);
+                            }, 'PersistMatch', $retryAfterDefault);
+                        } catch (\Throwable $e) {
+                            $io->writeln('  <comment>PersistMatch error: ' . $e->getMessage() . '</comment>');
+                            continue;
+                        }
                         $totalNewMatches++;
                         $newInStratum++;
                     }
