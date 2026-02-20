@@ -38,6 +38,9 @@ class SampleMatchStorageService
     /** @var array<string, array{0: ?string, 1: ?string}> in-memory cache region:puuid => [tier, rank] */
     private array $tierRankCache = [];
 
+    /** @var array<string, array{0: ?string, 1: ?string}> in-memory cache region:puuid:queueId => [tier, rank] (backfill) */
+    private array $tierRankByQueueCache = [];
+
     public function __construct(
         private readonly SampleMatchRepository $sampleMatchRepository,
         private readonly SampleMatchParticipantRepository $sampleMatchParticipantRepository,
@@ -306,6 +309,79 @@ class SampleMatchStorageService
             }
         }
         return $entries[0] ?? null;
+    }
+
+    /**
+     * Resolve tier/rank for a puuid in a specific queue (for backfill). Uses in-memory cache by region:puuid:queueId,
+     * then SamplePlayer DB (same queue type), then League-v4 API. Rank is for that queue only; if none, returns nulls.
+     *
+     * @return array{0: ?string, 1: ?string} [tier, rank]
+     */
+    public function resolveTierRankForPuuidAndQueueId(string $puuid, string $region, int $queueId): array
+    {
+        $queueType = self::QUEUE_ID_TO_QUEUE_TYPE[$queueId] ?? null;
+        $cacheKey = $region . ':' . $puuid . ':' . $queueId;
+        if (isset($this->tierRankByQueueCache[$cacheKey])) {
+            return $this->tierRankByQueueCache[$cacheKey];
+        }
+
+        if ($queueType !== null) {
+            $cached = $this->samplePlayerRepository->findByPuuidAndRegion($puuid, $region);
+            if ($cached !== null && $cached->getQueueType() === $queueType) {
+                $result = [$cached->getTier(), $cached->getRank()];
+                $this->tierRankByQueueCache[$cacheKey] = $result;
+                return $result;
+            }
+        }
+
+        $platform = strtolower($region);
+        $entries = null;
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            $this->throttler->waitIfNeeded(RiotApiThrottler::TYPE_LEAGUE_BY_PUUID);
+            try {
+                $entries = $this->riotApi->getLeagueEntriesByPuuid($platform, $puuid);
+                $this->throttler->recordRequest(RiotApiThrottler::TYPE_LEAGUE_BY_PUUID);
+                break;
+            } catch (\Throwable $e) {
+                $this->throttler->recordRequest(RiotApiThrottler::TYPE_LEAGUE_BY_PUUID);
+                if ($attempt === 0 && method_exists($e, 'getResponse') && $e->getResponse() !== null) {
+                    $response = $e->getResponse();
+                    if (method_exists($response, 'getStatusCode') && $response->getStatusCode() === 429) {
+                        throw $e;
+                    }
+                }
+                $result = [null, null];
+                $this->tierRankByQueueCache[$cacheKey] = $result;
+                return $result;
+            }
+        }
+        if ($entries === null) {
+            $result = [null, null];
+            $this->tierRankByQueueCache[$cacheKey] = $result;
+            return $result;
+        }
+
+        $entry = $this->pickLeagueEntryForQueue($entries, $queueId, $queueType);
+        if ($entry === null) {
+            $result = [null, null];
+            $this->tierRankByQueueCache[$cacheKey] = $result;
+            return $result;
+        }
+
+        $tier = isset($entry['tier']) ? strtoupper((string) $entry['tier']) : null;
+        $rank = isset($entry['rank']) ? strtoupper((string) $entry['rank']) : null;
+        if ($tier !== null && ($rank === null || $rank === '') && \in_array($tier, ['MASTER', 'GRANDMASTER', 'CHALLENGER'], true)) {
+            $rank = 'I';
+        }
+
+        $entryQueueType = $entry['queueType'] ?? $queueType;
+        if ($tier !== null && $rank !== null && $entryQueueType !== null && $entryQueueType !== '') {
+            $this->samplePlayerRepository->upsert($puuid, $region, $tier, $rank, $entryQueueType);
+        }
+
+        $result = [$tier, $rank];
+        $this->tierRankByQueueCache[$cacheKey] = $result;
+        return $result;
     }
 
     private function persistOneParticipant(

@@ -9,7 +9,7 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 class EmailVerificationService
 {
     public function __construct(
-        private readonly MailgunEmailService $mailgunEmailService,
+        private readonly EmailServiceInterface $emailService,
         private readonly EntityManagerInterface $em,
         private readonly string $appUrl
     ) {}
@@ -30,7 +30,7 @@ class EmailVerificationService
             "Se você não se cadastrou, pode ignorar este email.\n\n" .
             "Atenciosamente,\nEquipe Fitrise";
 
-        $this->mailgunEmailService->sendEmail(
+        $this->emailService->sendEmail(
             to: $user->getEmail(),
             subject: 'Verificação de Conta - Fitrise',
             body: $emailBody

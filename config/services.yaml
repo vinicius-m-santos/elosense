@@ -50,11 +50,12 @@ services:
                   method: onAuthenticationFailure,
               }
 
-    App\Service\MailgunEmailService:
+    App\Service\MailerSendEmailService:
         arguments:
-            $domain: '%env(MAILGUN_DOMAIN)%'
-            $defaultFrom: '%env(MAILGUN_FROM)%'
-            $apiKey: '%env(MAILGUN_API_KEY)%'
+            $defaultFrom: '%env(MAILERSEND_FROM)%'
+            $apiKey: '%env(MAILERSEND_API_KEY)%'
+
+    App\Service\EmailServiceInterface: '@App\Service\MailerSendEmailService'
 
     App\Service\EmailVerificationService:
         arguments:

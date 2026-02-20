@@ -17,8 +17,8 @@ php bin/console cache:warmup --env=prod
 
 # Workers (background): scraper loop + aggregate every hour
 mkdir -p var/log
-nohup bash ./bin/scraper-worker.sh >> var/log/scraper-worker.log 2>&1 &
-echo "Scraper worker started (log: var/log/scraper-worker.log)"
+# nohup bash ./bin/scraper-worker.sh >> var/log/scraper-worker.log 2>&1 &
+# echo "Scraper worker started (log: var/log/scraper-worker.log)"
 nohup bash ./bin/aggregate-worker.sh >> var/log/aggregate-worker.log 2>&1 &
 echo "Aggregate worker started (log: var/log/aggregate-worker.log)"
 

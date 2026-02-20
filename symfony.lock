@@ -91,15 +91,6 @@
             "./config/packages/lexik_jwt_authentication.yaml"
         ]
     },
-    "mailgun/mailgun-php": {
-        "version": "4.3",
-        "recipe": {
-            "repo": "github.com/symfony/recipes-contrib",
-            "branch": "main",
-            "version": "2.3",
-            "ref": "9aea325919644b58a53edf71d1212005e7081cad"
-        }
-    },
     "nelmio/cors-bundle": {
         "version": "2.5",
         "recipe": {
