@@ -16,30 +16,27 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          // tudo que vem de node_modules
-          if (id.includes("node_modules")) {
-            if (id.includes("react-router")) {
-              return "router";
+            if (id.includes("node_modules")) {
+            
+                if (id.includes("framer-motion")) {
+                return "motion";
+                }
+            
+                if (id.includes("lucide-react")) {
+                return "icons";
+                }
+            
+                if (id.includes("@radix-ui")) {
+                return "radix";
+                }
+            
+                if (id.includes("react-router")) {
+                return "router";
+                }
+            
+                // NÃO separar react
+                return "vendor";
             }
-
-            if (id.includes("framer-motion")) {
-              return "motion";
-            }
-
-            if (id.includes("lucide-react")) {
-              return "icons";
-            }
-
-            if (id.includes("@radix-ui")) {
-              return "radix";
-            }
-
-            if (id.includes("react")) {
-              return "react-vendor";
-            }
-
-            return "vendor";
-          }
         },
       },
     },
