@@ -1,1 +1,0 @@
-import{r,j as t}from"./vendor-mRmXoTzJ.js";import{u as s}from"./index-DpC4sAuN.js";import"./router-b8HoQcXb.js";import"./radix-Ba4cyD9q.js";import"./icons-LK5f2ZN2.js";const i=()=>{const{logout:o}=s();return r.useEffect(()=>{o()},[]),t.jsx(t.Fragment,{})};export{i as default};

@@ -4,13 +4,13 @@ export function getQueueType(queueId: number | null | undefined): string {
     case 420:
       return "Ranqueada Solo/Duo";
     case 430:
-      return "Normals com escolha";
+      return "Normal com escolha";
     case 440:
       return "Ranqueada Flex";
     case 450:
       return "ARAM";
     case 400:
-      return "Normals cegas";
+      return "Normal às cegas";
     case 1020:
       return "Um por Todos";
     case 1300:
