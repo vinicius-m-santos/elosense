@@ -61,24 +61,29 @@ final class MatchScoreCalculator
     private const DEFAULT_CAPS = [8.0, 650, 50];
 
     /**
-     * Calculate letter score S/A/B/C/D.
+     * Calculate score: returns letter (S/A/B/C/D) and numeric (0-100).
      *
      * @param array{csPerMin: float, deaths: int, damagePerMin: float, visionScore: float, killParticipation?: ?float} $metrics
      * @param array{teamPosition?: string, champion?: string, championId?: ?int, tier?: string, rank?: string, gameDurationSeconds?: ?int, benchmark?: ?EloBenchmark} $context
+     * @return array{letter: string, numeric: int}
      */
-    public function calculateScore(array $metrics, array $context = []): string
+    public function calculateScore(array $metrics, array $context = []): array
     {
         $benchmark = $context['benchmark'] ?? null;
-        if ($benchmark instanceof EloBenchmark) {
-            return $this->scoreFromBenchmark($metrics, $context, $benchmark);
-        }
-        return $this->scoreFromFallback($metrics, $context);
+        $raw = $benchmark instanceof EloBenchmark
+            ? $this->scoreFromBenchmark($metrics, $context, $benchmark)
+            : $this->scoreFromFallback($metrics, $context);
+        $raw = max(0, min(1, $raw));
+        return [
+            'letter' => $this->rawToLetter($raw),
+            'numeric' => (int) round($raw * 100),
+        ];
     }
 
     /**
-     * Score using P50/P75 from benchmark (elo/position, optionally champion-specific).
+     * Score using P50/P75 from benchmark (elo/position, optionally champion-specific). Returns raw [0,1].
      */
-    private function scoreFromBenchmark(array $metrics, array $context, EloBenchmark $benchmark): string
+    private function scoreFromBenchmark(array $metrics, array $context, EloBenchmark $benchmark): float
     {
         $position = $this->normalizePosition($context['teamPosition'] ?? '');
         $weights = self::ROLE_WEIGHTS[$position] ?? self::ROLE_WEIGHTS['MID'];
@@ -90,14 +95,13 @@ final class MatchScoreCalculator
         $kp = $this->normHigher($metrics['killParticipation'] ?? 0, $benchmark->getKillParticipationP50(), $benchmark->getKillParticipationP75());
 
         $raw = $cs * $weights[0] + $deaths * $weights[1] + $damage * $weights[2] + $vision * $weights[3] + $kp * $weights[4];
-        $raw = $this->normalizeWeightsSum($raw, $weights);
-        return $this->rawToLetter(max(0, min(1, $raw)));
+        return $this->normalizeWeightsSum($raw, $weights);
     }
 
     /**
-     * Fallback when no benchmark: role-based caps and tier scaling, non-linear deaths by duration.
+     * Fallback when no benchmark: role-based caps and tier scaling, non-linear deaths by duration. Returns raw [0,1].
      */
-    private function scoreFromFallback(array $metrics, array $context): string
+    private function scoreFromFallback(array $metrics, array $context): float
     {
         $position = $this->normalizePosition($context['teamPosition'] ?? '');
         $weights = self::ROLE_WEIGHTS[$position] ?? self::ROLE_WEIGHTS['MID'];
@@ -114,8 +118,7 @@ final class MatchScoreCalculator
         $kpNorm = min(1.0, ($metrics['killParticipation'] ?? 0) / 100.0);
 
         $raw = $csNorm * $weights[0] + $deathsNorm * $weights[1] + $damageNorm * $weights[2] + $visionNorm * $weights[3] + $kpNorm * $weights[4];
-        $raw = $this->normalizeWeightsSum($raw, $weights);
-        return $this->rawToLetter(max(0, min(1, $raw)));
+        return $this->normalizeWeightsSum($raw, $weights);
     }
 
     /** Higher is better: 0 at/below P50, 1 at/above P75, linear between. */
@@ -231,6 +234,15 @@ final class MatchScoreCalculator
             return 'C';
         }
         return 'D';
+    }
+
+    /**
+     * Approximate numeric (0-100) from a stored letter. Used when returning cached matches from DB.
+     */
+    public static function letterToNumeric(string $letter): int
+    {
+        $mid = ['S' => 95, 'A' => 82, 'B' => 65, 'C' => 45, 'D' => 17];
+        return $mid[strtoupper($letter)] ?? 50;
     }
 
     private function normalizePosition(string $position): string

@@ -1,0 +1,1 @@
+import{r,j as t}from"./react-vendor-BInR9Shn.js";import{u as s}from"./index-B_AURrDL.js";import"./vendor-C9Jj3IxS.js";import"./router-Cqd3RRks.js";import"./radix-CwdKC5j5.js";import"./icons-BoOKHP1I.js";const f=()=>{const{logout:o}=s();return r.useEffect(()=>{o()},[]),t.jsx(t.Fragment,{})};export{f as default};

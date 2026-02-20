@@ -208,7 +208,7 @@ class PlayerController extends AbstractController
             $match->setSoloDeaths($metrics['soloDeaths']);
             $match->setKillParticipation($metrics['killParticipation']);
             $match->setGoldPerMin($metrics['goldPerMin']);
-            $match->setScore($metrics['score']);
+            $match->setScore($metrics['scoreLetter'] ?? 'C');
             $match->setGameDuration($metrics['gameDuration']);
             $match->setGameEndTimestamp($metrics['gameEndTimestamp'] ?? null);
             $match->setQueueId($metrics['queueId'] ?? null);
@@ -276,7 +276,7 @@ class PlayerController extends AbstractController
             $match->setSoloDeaths($metrics['soloDeaths']);
             $match->setKillParticipation($metrics['killParticipation']);
             $match->setGoldPerMin($metrics['goldPerMin']);
-            $match->setScore($enriched['score']);
+            $match->setScore($enriched['scoreLetter'] ?? 'C');
             $match->setGameDuration($metrics['gameDuration']);
             $match->setGameEndTimestamp($metrics['gameEndTimestamp'] ?? null);
             $match->setQueueId($metrics['queueId'] ?? null);
@@ -367,13 +367,15 @@ class PlayerController extends AbstractController
             'gameDurationSeconds' => isset($payload['gameDuration']) ? (int) $payload['gameDuration'] : null,
             'benchmark' => $benchmark,
         ];
-        $payload['score'] = $this->matchScoreCalculator->calculateScore([
+        $scoreResult = $this->matchScoreCalculator->calculateScore([
             'csPerMin' => (float) ($payload['csPerMin'] ?? 0),
             'deaths' => (int) ($payload['deaths'] ?? 0),
             'damagePerMin' => (float) ($payload['damagePerMin'] ?? 0),
             'visionScore' => (float) ($payload['visionScore'] ?? 0),
             'killParticipation' => $payload['killParticipation'] !== null ? (float) $payload['killParticipation'] : null,
         ], $scoreContext);
+        $payload['score'] = $scoreResult['numeric'];
+        $payload['scoreLetter'] = $scoreResult['letter'];
 
         return $payload;
     }
@@ -408,7 +410,8 @@ class PlayerController extends AbstractController
             'soloDeaths' => $m->getSoloDeaths(),
             'killParticipation' => $m->getKillParticipation(),
             'goldPerMin' => $m->getGoldPerMin(),
-            'score' => $m->getScore(),
+            'score' => MatchScoreCalculator::letterToNumeric($m->getScore()),
+            'scoreLetter' => $m->getScore(),
             'gameDuration' => $m->getGameDuration(),
             'gameEndTimestamp' => $m->getGameEndTimestamp(),
             'queueId' => $m->getQueueId(),
@@ -434,6 +437,7 @@ class PlayerController extends AbstractController
             'killParticipation' => $metrics['killParticipation'],
             'goldPerMin' => $metrics['goldPerMin'],
             'score' => $metrics['score'],
+            'scoreLetter' => $metrics['scoreLetter'] ?? null,
             'gameDuration' => $metrics['gameDuration'] ?? null,
             'gameEndTimestamp' => $metrics['gameEndTimestamp'] ?? null,
             'queueId' => $metrics['queueId'] ?? null,

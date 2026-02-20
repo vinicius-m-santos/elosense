@@ -71,7 +71,9 @@ export type MatchSummary = {
   soloDeaths: number;
   killParticipation: number | null;
   goldPerMin: number | null;
-  score: string;
+  /** Score 0-100. Letter grade kept for badge styling (scoreLetter). */
+  score: number;
+  scoreLetter?: string | null;
   gameDuration: number | null;
   /** Match end time in ms (epoch). For ordering and "time ago" display. */
   gameEndTimestamp?: number | null;

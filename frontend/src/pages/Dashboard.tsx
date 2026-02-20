@@ -149,15 +149,13 @@ export default function DashboardConsistent() {
     return list;
   })();
 
-  const scoreBadge = (score: string) => {
-    const map: Record<string, string> = {
-      S: "bg-purple-500/20 text-purple-300 dark:text-purple-400 border-purple-500/30",
-      A: "bg-blue-500/20 text-blue-300 dark:text-blue-400 border-blue-500/30",
-      B: "bg-emerald-500/20 text-emerald-300 dark:text-emerald-400 border-emerald-500/30",
-      C: "bg-amber-500/20 text-amber-300 dark:text-amber-400 border-amber-500/30",
-      D: "bg-red-500/20 text-red-300 dark:text-red-400 border-red-500/30",
-    };
-    return map[score] ?? map.C;
+  /** Badge style by score 0-100 (S: 90+, A: 75-89, B: 55-74, C: 35-54, D: 0-34). */
+  const scoreBadge = (score: number) => {
+    if (score >= 90) return "bg-purple-500/20 text-purple-300 dark:text-purple-400 border-purple-500/30";
+    if (score >= 75) return "bg-blue-500/20 text-blue-300 dark:text-blue-400 border-blue-500/30";
+    if (score >= 55) return "bg-emerald-500/20 text-emerald-300 dark:text-emerald-400 border-emerald-500/30";
+    if (score >= 35) return "bg-amber-500/20 text-amber-300 dark:text-amber-400 border-amber-500/30";
+    return "bg-red-500/20 text-red-300 dark:text-red-400 border-red-500/30";
   };
 
   const winBadge = (result: boolean) =>
@@ -167,12 +165,9 @@ export default function DashboardConsistent() {
 
   const avgScore =
     matches?.length > 0
-      ? matches.reduce((acc, m) => {
-        const v = { S: 5, A: 4, B: 3, C: 2, D: 1 }[m.score] ?? 0;
-        return acc + v;
-      }, 0) / matches.length
+      ? matches.reduce((acc, m) => acc + (typeof m.score === "number" ? m.score : 50), 0) / matches.length
       : 0;
-  const avgScoreLabel = avgScore >= 4.5 ? "S" : avgScore >= 3.5 ? "A" : avgScore >= 2.5 ? "B" : avgScore >= 1.5 ? "C" : "D";
+  const avgScoreLabel = avgScore >= 90 ? "S" : avgScore >= 75 ? "A" : avgScore >= 55 ? "B" : avgScore >= 35 ? "C" : "D";
   const wins = matches?.filter((m) => m.result).length ?? 0;
   const winrate = matches?.length > 0 ? Math.round((wins / matches.length) * 100) : 0;
   const avgKda =
@@ -417,7 +412,9 @@ export default function DashboardConsistent() {
                       </div>
                     </div>
                     <div className="flex w-full md:w-auto justify-end md:justify-start md:items-center gap-3">
-                      <Badge className={scoreBadge(match.score)}>{match.score}</Badge>
+                      <Badge className={scoreBadge(typeof match.score === "number" ? match.score : 50)}>
+                        {typeof match.score === "number" ? match.score : "—"}
+                      </Badge>
                       <Badge className={winBadge(match.result)}>
                         {match.result ? "Vitória" : "Derrota"}
                       </Badge>

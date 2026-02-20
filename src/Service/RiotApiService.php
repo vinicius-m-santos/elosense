@@ -318,7 +318,7 @@ class RiotApiService
             'championId' => $championId,
             'gameDurationSeconds' => $gameDuration > 0 ? $gameDuration : null,
         ];
-        $score = $this->matchScoreCalculator->calculateScore($metricsForScore, $contextForScore);
+        $scoreResult = $this->matchScoreCalculator->calculateScore($metricsForScore, $contextForScore);
 
         return [
             'matchId' => $matchId,
@@ -334,7 +334,8 @@ class RiotApiService
             'soloDeaths' => $soloDeaths,
             'killParticipation' => $killParticipation !== null ? round($killParticipation, 2) : null,
             'goldPerMin' => round($goldPerMin, 2),
-            'score' => $score,
+            'score' => $scoreResult['numeric'],
+            'scoreLetter' => $scoreResult['letter'],
             'gameDuration' => $gameDuration > 0 ? $gameDuration : null,
             'gameEndTimestamp' => $gameEndTimestamp,
             'queueId' => $queueId,

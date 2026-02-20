@@ -74,6 +74,23 @@ const BENCHMARK_METRIC_TOOLTIPS: Record<string, string> = {
   Mortes: "Número de mortes. Para essa métrica, menos que a mediana é melhor.",
 };
 
+/** Tooltip text for score: how it's calculated and role-specific weights. */
+function getScoreTooltipContent(teamPosition: string | null | undefined): string {
+  const p = (teamPosition ?? "").toUpperCase();
+  const roleDesc: Record<string, string> = {
+    TOP: "TOP: CS 22%, Mortes 26%, Dano 22%, Visão 15%, Part. abates 15%.",
+    JUNGLE: "JG: CS 15%, Mortes 25%, Dano 20%, Visão 22%, Part. abates 18%.",
+    MID: "MID: CS 25%, Mortes 22%, Dano 25%, Visão 13%, Part. abates 15%.",
+    MIDDLE: "MID: CS 25%, Mortes 22%, Dano 25%, Visão 13%, Part. abates 15%.",
+    BOTTOM: "ADC: CS 25%, Mortes 22%, Dano 25%, Visão 13%, Part. abates 15%.",
+    UTILITY: "SUP: CS 10%, Mortes 22%, Dano 13%, Visão 30%, Part. abates 25%.",
+    SUPPORT: "SUP: CS 10%, Mortes 22%, Dano 13%, Visão 30%, Part. abates 25%.",
+    ADC: "ADC: CS 25%, Mortes 22%, Dano 25%, Visão 13%, Part. abates 15%.",
+  };
+  const roleText = roleDesc[p] ?? "Os pesos mudam conforme a posição (TOP, JG, MID, ADC, SUP).";
+  return `A nota (0–100) é uma média ponderada de: CS/min, mortes (menos é melhor), dano/min, visão e participação em abates. ${roleText} Quando há dados do seu elo, a nota é comparada aos benchmarks (P50/P75) da posição.`;
+}
+
 export default function MatchDetailPageConsistent() {
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
@@ -152,15 +169,13 @@ export default function MatchDetailPageConsistent() {
       .finally(() => setLoadingComparison(false));
   }, [matchId, puuid, region, match, loading, comparisonTier, comparisonRank, effectiveRank, lastFetchedTierRank?.tier, lastFetchedTierRank?.rank]);
 
-  const scoreBadge = (score: string) => {
-    const map: Record<string, string> = {
-      S: "bg-purple-500/20 text-purple-300 dark:text-purple-400 border-purple-500/30",
-      A: "bg-blue-500/20 text-blue-300 dark:text-blue-400 border-blue-500/30",
-      B: "bg-emerald-500/20 text-emerald-300 dark:text-emerald-400 border-emerald-500/30",
-      C: "bg-amber-500/20 text-amber-300 dark:text-amber-400 border-amber-500/30",
-      D: "bg-red-500/20 text-red-300 dark:text-red-400 border-red-500/30",
-    };
-    return map[score] ?? map.C;
+  /** Badge style by score 0-100 (S: 90+, A: 75-89, B: 55-74, C: 35-54, D: 0-34). */
+  const scoreBadge = (score: number) => {
+    if (score >= 90) return "bg-purple-500/20 text-purple-300 dark:text-purple-400 border-purple-500/30";
+    if (score >= 75) return "bg-blue-500/20 text-blue-300 dark:text-blue-400 border-blue-500/30";
+    if (score >= 55) return "bg-emerald-500/20 text-emerald-300 dark:text-emerald-400 border-emerald-500/30";
+    if (score >= 35) return "bg-amber-500/20 text-amber-300 dark:text-amber-400 border-amber-500/30";
+    return "bg-red-500/20 text-red-300 dark:text-red-400 border-red-500/30";
   };
 
   const hasBenchmarks = match?.idealBenchmarks != null && match.idealBenchmarks.sampleSize > 0;
@@ -271,11 +286,29 @@ export default function MatchDetailPageConsistent() {
               </div>
               <div className="text-right">
                 <div className="text-sm text-zinc-600 dark:text-zinc-400">Pontuação</div>
-                <div
-                  className={`text-3xl font-bold ${scoreBadge(match.score)} border rounded-lg px-2 inline-block`}
-                >
-                  {match.score}
-                </div>
+                <TooltipProvider delayDuration={200}>
+                  <div className="flex items-center gap-1.5 justify-end">
+                    <div
+                      className={`text-3xl font-bold ${scoreBadge(typeof match.score === "number" ? match.score : 50)} border rounded-lg px-2 inline-block`}
+                    >
+                      {typeof match.score === "number" ? match.score : "—"}
+                    </div>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex p-0.5 rounded focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                          aria-label="Como a nota é calculada?"
+                        >
+                          <HelpCircle size={18} className="text-zinc-500" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-[320px]">
+                        {getScoreTooltipContent(match.teamPosition)}
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </TooltipProvider>
               </div>
             </CardContent>
           </Card>
