@@ -151,14 +151,6 @@ class PlayerController extends AbstractController
         $region = $request->query->get('region', '');
         $platform = $region !== '' ? $region : null;
 
-        $cached = $this->playerMatchRepository->findLastByPuuid($puuid, 10);
-        $allHaveTimestamp = \count($cached) > 0 && \count(array_filter($cached, fn(PlayerMatch $m) => $m->getGameEndTimestamp() !== null)) === \count($cached);
-        if (\count($cached) >= 10 && $allHaveTimestamp) {
-            $list = array_map(fn(PlayerMatch $m) => $this->enrichMatchResponse($this->matchToArray($m), $region, $player), $cached);
-            $list = $this->sortMatchesByTimestamp($list);
-            return new JsonResponse($list);
-        }
-
         try {
             $matchIds = $this->riotApiService->getMatchIdsByPuuid($puuid, 10, $platform);
         } catch (\Throwable $e) {
