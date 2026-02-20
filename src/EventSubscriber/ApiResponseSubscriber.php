@@ -2,10 +2,10 @@
 
 namespace App\EventSubscriber;
 
+use App\Exception\UserFacingHttpException;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
-use Symfony\Component\HttpKernel\Event\ViewEvent;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Doctrine\DBAL\Exception as DBALException;
@@ -34,9 +34,13 @@ class ApiResponseSubscriber implements EventSubscriberInterface
             $statusCode = 400;
         }
 
+        $errorCode = $exception instanceof UserFacingHttpException
+            ? $exception->getErrorCode()
+            : (string) $statusCode;
+
         $response = new JsonResponse([
             'error' => [
-                'code' => $statusCode,
+                'code' => $errorCode,
                 'message' => $message,
             ]
         ], $statusCode);

@@ -167,7 +167,6 @@ export default function DashboardConsistent() {
     matches?.length > 0
       ? matches.reduce((acc, m) => acc + (typeof m.score === "number" ? m.score : 50), 0) / matches.length
       : 0;
-  const avgScoreLabel = avgScore >= 90 ? "S" : avgScore >= 75 ? "A" : avgScore >= 55 ? "B" : avgScore >= 35 ? "C" : "D";
   const wins = matches?.filter((m) => m.result).length ?? 0;
   const winrate = matches?.length > 0 ? Math.round((wins / matches.length) * 100) : 0;
   const avgKda =
@@ -232,7 +231,7 @@ export default function DashboardConsistent() {
             <div>
               <div className="font-semibold">{gameName}#{tagLine}</div>
               <div className="text-sm text-zinc-600 dark:text-zinc-400">
-                Score médio {avgScoreLabel} • {winrate}% taxa de vitória
+                Score médio {Math.round(avgScore)}/100 • {winrate}% taxa de vitória
               </div>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span className="text-xs text-zinc-500">Região: {region}</span>
@@ -321,7 +320,7 @@ export default function DashboardConsistent() {
             ))
           ) : (
             [
-              { label: "Score médio", value: avgScoreLabel, icon: Trophy },
+              { label: "Score médio", value: `${Math.round(avgScore)}/100`, icon: Trophy },
               { label: "KDA médio", value: avgKda, icon: Sword },
               { label: "CS/min", value: avgCs, icon: Target },
               { label: "Taxa de vitória", value: `${winrate}%`, icon: TrendingUp },

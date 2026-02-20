@@ -3,10 +3,11 @@
 namespace App\Service;
 
 use App\Entity\Player;
+use App\Exception\UserFacingHttpException;
 use App\Repository\PlayerRepository;
 use App\Service\PlayerQueueRankService;
 use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
+use Psr\Log\LoggerInterface;
 
 final class PlayerService
 {
@@ -14,7 +15,9 @@ final class PlayerService
         private readonly PlayerRepository $playerRepository,
         private readonly RiotApiService $riotApiService,
         private readonly PlayerQueueRankService $playerQueueRankService,
-        private readonly EntityManagerInterface $em
+        private readonly EntityManagerInterface $em,
+        private readonly RiotApiErrorTranslator $riotApiErrorTranslator,
+        private readonly LoggerInterface $logger
     ) {}
 
     public function getPlayerByRiotId(string $gameName, string $tagLine, string $region): Player
@@ -34,7 +37,14 @@ final class PlayerService
                 $player->setTag($tagLine);
                 $this->playerRepository->add($player, true);
             } catch (\Throwable $e) {
-                throw new UnprocessableEntityHttpException('Player not found: ' . $e->getMessage());
+                $this->logger->warning('Riot API: player not found', [
+                    'gameName' => $gameName,
+                    'tagLine' => $tagLine,
+                    'message' => $e->getMessage(),
+                ]);
+                $translated = $this->riotApiErrorTranslator->translate($e, RiotApiErrorTranslator::CONTEXT_PLAYER);
+                $statusCode = $translated['code'] === 'player_not_found' ? 404 : 422;
+                throw new UserFacingHttpException($statusCode, $translated['message'], $translated['code']);
             }
         }
 

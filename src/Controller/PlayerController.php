@@ -4,12 +4,14 @@ namespace App\Controller;
 
 use App\Entity\Player;
 use App\Entity\PlayerMatch;
+use App\Exception\UserFacingHttpException;
 use App\Repository\PlayerMatchRepository;
 use App\Repository\PlayerRepository;
 use App\Service\BenchmarkService;
 use App\Service\MatchAnalysisService;
 use App\Service\MatchScoreCalculator;
 use App\Service\PlayerService;
+use App\Service\RiotApiErrorTranslator;
 use App\Service\RiotApiService;
 use App\Service\SampleMatchStorageService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -42,7 +44,8 @@ class PlayerController extends AbstractController
         private readonly EntityManagerInterface $em,
         private readonly LoggerInterface $logger,
         private readonly PlayerService $playerService,
-        private readonly NormalizerInterface $normalizer
+        private readonly NormalizerInterface $normalizer,
+        private readonly RiotApiErrorTranslator $riotApiErrorTranslator
     ) {}
 
     #[Route('/player', name: 'api_player', methods: ['GET'])]
@@ -159,7 +162,13 @@ class PlayerController extends AbstractController
         try {
             $matchIds = $this->riotApiService->getMatchIdsByPuuid($puuid, 10, $platform);
         } catch (\Throwable $e) {
-            throw new UnprocessableEntityHttpException('Failed to fetch matches: ' . $e->getMessage());
+            $this->logger->warning('Riot API: fetch matches failed', [
+                'puuid' => substr($puuid, 0, 8) . '…',
+                'message' => $e->getMessage(),
+            ]);
+            $translated = $this->riotApiErrorTranslator->translate($e, RiotApiErrorTranslator::CONTEXT_MATCHES);
+            $statusCode = $translated['code'] === 'rate_limited' ? 429 : 422;
+            throw new UserFacingHttpException($statusCode, $translated['message'], $translated['code']);
         }
 
         $list = [];
@@ -251,7 +260,14 @@ class PlayerController extends AbstractController
             $timeline = $this->riotApiService->getMatchTimeline($matchId, $platform);
             $metrics = $this->riotApiService->buildMatchMetricsFromPayload($matchPayload, $timeline, $puuid, $platform);
         } catch (\Throwable $e) {
-            throw new NotFoundHttpException('Match not found: ' . $e->getMessage());
+            $this->logger->warning('Riot API: match not found or error', [
+                'matchId' => $matchId,
+                'puuid' => substr($puuid, 0, 8) . '…',
+                'message' => $e->getMessage(),
+            ]);
+            $translated = $this->riotApiErrorTranslator->translate($e, RiotApiErrorTranslator::CONTEXT_MATCH);
+            $statusCode = $translated['code'] === 'match_not_found' ? 404 : 422;
+            throw new UserFacingHttpException($statusCode, $translated['message'], $translated['code']);
         }
 
         if ($region !== '') {
